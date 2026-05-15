@@ -1,0 +1,18 @@
+name: yzxnice
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - duckdb
+  - pip
+  - nicegui
+  - sqlalchemy
+  - duckdb-engine
+  - argon2-cffi
+  - pillow
+  - python-dotenv
+  - fastapi
+  - starlette
+  - requests
+  - pip:
+    - playwright
