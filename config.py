@@ -15,7 +15,7 @@ class Config:
     DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD", "")
     if not DEFAULT_PASSWORD:
         raise RuntimeError("DEFAULT_PASSWORD 环境变量未设置，请设置后启动应用")
-    APP_TITLE = os.getenv("APP_TITLE", "多学校朋友圈教学系统")
+    APP_TITLE = os.getenv("APP_TITLE", "教学模拟平台")
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "static/uploads")
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
     

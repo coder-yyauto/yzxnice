@@ -2,7 +2,7 @@
 
 ---
 
-## 多学校朋友圈教学系统（NiceGUI + DuckDB）
+## 教学模拟平台（NiceGUI + DuckDB）
 
 ### 一、项目概述
 

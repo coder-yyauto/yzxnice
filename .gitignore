@@ -1,0 +1,9 @@
+run/
+data/*.duckdb
+data/*.duckdb.wal
+static/uploads/
+.nicegui/
+__pycache__/
+*.pyc
+.pixi/
+*.egg-info/

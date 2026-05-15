@@ -1,0 +1,25 @@
+[workspace]
+name = "yzxnice"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.12.*"
+duckdb = "*"
+nicegui = "*"
+sqlalchemy = "*"
+duckdb-engine = "*"
+argon2-cffi = "*"
+pillow = "*"
+python-dotenv = "*"
+fastapi = "*"
+starlette = "*"
+requests = "*"
+uvicorn = "*"
+
+[pypi-dependencies]
+playwright = "*"
+
+[tasks]
+start = "python main.py"
+prod = "uvicorn asgi:fastapi_app --uds /dev/shm/yzxnice.sock --workers 1 --access-log --proxy-headers --forwarded-allow-ips=*"

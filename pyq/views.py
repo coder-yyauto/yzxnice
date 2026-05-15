@@ -34,8 +34,17 @@ async def home_page():
     render_navbar()
 
     user = AuthManager.get_current_user()
-    filter_state = {"org_id": None}
+    filter_state = {"org_ids": None}
     post_container = None
+
+    with get_db() as db:
+        user_obj = db.query(User).filter(User.id == user["user_id"]).first()
+        is_teacher_view = user_obj and user_obj.user_type in ("teacher", "admin")
+        school_id = None
+        if is_teacher_view and user_obj:
+            school = get_user_school(db, user_obj)
+            if school:
+                school_id = school.id
 
     with ui.column().classes("w-full min-h-screen bg-[#ededed] items-center"):
         with ui.column().classes("w-full max-w-[428px] px-4 pt-4 pb-8"):
@@ -47,77 +56,66 @@ async def home_page():
                         "flat dense size=sm color=grey-7"
                     ).tooltip("发布动态")
 
-                    if user.get("user_type") in ("teacher", "admin") or user.get("is_admin"):
-                        with get_db() as db:
-                            if user.get("school_id"):
-                                school = db.query(Org).filter(Org.id == user["school_id"]).first()
-                                if school:
-                                    filter_label = ui.button("选择范围: 全部", on_click=lambda: _open_filter_dialog()).props(
-                                        "flat no-caps dense size=sm color=grey-7"
-                                    ).classes("text-xs")
+            if is_teacher_view and school_id:
+                with get_db() as db:
+                    _grades_data = []
+                    for grade in get_grades(db, school_id):
+                        classes = get_classes(db, grade.id)
+                        _grades_data.append({
+                            "id": grade.id,
+                            "name": grade.name,
+                            "classes": [{"id": c.id, "name": c.name} for c in classes],
+                        })
 
-                                    def _open_filter_dialog():
-                                        with ui.dialog() as dialog, ui.card().classes("w-80 p-4"):
-                                            ui.label("选择范围").classes("text-base font-bold mb-3")
+                filter_label = ui.button("查看范围: 全部", on_click=lambda: _open_filter_dialog()).props(
+                    "flat no-caps dense size=sm color=grey-7"
+                ).classes("text-xs")
 
-                                            with ui.column().classes("w-full gap-0"):
-                                                ui.button("全部", on_click=lambda: _do_select([], dialog)).props(
-                                                    "flat no-caps dense align=left"
-                                                ).classes("w-full text-left")
+                def _open_filter_dialog():
+                    with ui.dialog() as dialog, ui.card().classes("w-80 p-4"):
+                        ui.label("查看范围").classes("text-base font-bold mb-3")
 
-                                                grades = get_grades(db, school.id)
-                                                for grade in grades:
-                                                    classes = get_classes(db, grade.id)
-                                                    with ui.expansion(grade.name, group="filter_tree").classes("w-full"):
-                                                        ui.button(
-                                                            f"{grade.name}(全选)",
-                                                            on_click=lambda cls=classes: _do_select(
-                                                                [c.id for c in cls], dialog
-                                                            ),
-                                                        ).props("flat no-caps dense align=left color=primary").classes(
-                                                            "w-full text-left text-sm"
-                                                        )
-                                                        for cls_ in classes:
-                                                            ui.button(
-                                                                cls_.name,
-                                                                on_click=lambda c=cls_: _do_select([c.id], dialog),
-                                                            ).props("flat no-caps dense align=left").classes(
-                                                                "w-full text-left text-sm"
-                                                            )
-                                        dialog.open()
+                        with ui.column().classes("w-full gap-0"):
+                            ui.button(
+                                "全部",
+                                on_click=lambda: _do_select([], "查看范围: 全部", dialog),
+                            ).props("flat no-caps dense align=left").classes("w-full text-left")
 
-                                    def _do_select(ids, dialog):
-                                        if ids:
-                                            filter_state["org_id"] = ids
-                                            names = []
-                                            for oid in ids:
-                                                o = db.query(Org).filter(Org.id == oid).first()
-                                                if o:
-                                                    names.append(o.name)
-                                            first = names[0] if names else ""
-                                            if len(names) > 1:
-                                                first_name = db.query(Org).filter(Org.id == ids[0]).first()
-                                                if first_name:
-                                                    parent = db.query(Org).filter(Org.id == first_name.parent_id).first()
-                                                    if parent and parent.org_type == "grade":
-                                                        filter_label.set_text(f"选择范围: {parent.name}")
-                                                    else:
-                                                        filter_label.set_text(f"选择范围: {first}等{len(names)}个班")
-                                                else:
-                                                    filter_label.set_text(f"选择范围: {first}等{len(names)}个班")
-                                            else:
-                                                filter_label.set_text(f"选择范围: {first}")
-                                        else:
-                                            filter_state["org_id"] = None
-                                            filter_label.set_text("选择范围: 全部")
-                                        dialog.close()
-                                        refresh_posts()
+                            for g in _grades_data:
+                                with ui.expansion(g["name"], group="filter_tree").classes("w-full"):
+                                    ui.button(
+                                        f'{g["name"]}(全选)',
+                                        on_click=lambda grade=g: _do_select(
+                                            [c["id"] for c in grade["classes"]], f'查看范围: {grade["name"]}', dialog
+                                        ),
+                                    ).props("flat no-caps dense align=left color=primary").classes(
+                                        "w-full text-left text-sm"
+                                    )
+                                    for cls_ in g["classes"]:
+                                        ui.button(
+                                            cls_["name"],
+                                            on_click=lambda c=cls_: _do_select(
+                                                [c["id"]], f'查看范围: {c["name"]}', dialog
+                                            ),
+                                        ).props("flat no-caps dense align=left").classes(
+                                            "w-full text-left text-sm"
+                                        )
+                    dialog.open()
+
+                def _do_select(ids, label_text, dialog):
+                    if ids:
+                        filter_state["org_ids"] = ids
+                    else:
+                        filter_state["org_ids"] = None
+                    filter_label.set_text(label_text)
+                    dialog.close()
+                    refresh_posts()
 
             def refresh_posts():
                 if post_container:
                     post_container.clear()
                     with post_container:
-                        posts = load_posts(user, filter_state.get("org_id"))
+                        posts = load_posts(user, filter_state.get("org_ids"))
                         if not posts:
                             ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
                         for pd in posts:
@@ -125,7 +123,7 @@ async def home_page():
 
             post_container = ui.column().classes("w-full")
             with post_container:
-                posts = load_posts(user, filter_state.get("org_id"))
+                posts = load_posts(user, filter_state.get("org_ids"))
                 if not posts:
                     ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
                 for pd in posts:
@@ -232,6 +230,10 @@ async def publish_page():
 
             with ui.column().classes("w-full bg-white"):
                 with ui.column().classes("w-full px-4 pt-4"):
+                    content_input = ui.textarea(placeholder="这一刻的想法...").classes("w-full").props(
+                        "borderless rows=4 dense"
+                    ).style("font-size: 15px; padding: 0;")
+
                     preview_container = ui.row().classes("flex flex-wrap gap-2")
 
                     def refresh_preview():
@@ -256,10 +258,6 @@ async def publish_page():
                     ).props("accept=image/* label=添加图片 color=grey-4 flat").classes("w-full").style(
                         "border: 2px dashed #d1d5db; border-radius: 8px;"
                     )
-
-                content_input = ui.textarea(placeholder="这一刻的想法...").classes("w-full").props(
-                    "borderless rows=4 dense"
-                ).style("font-size: 15px; padding: 12px 16px;")
 
                 ui.element("div").classes("h-2 bg-[#ededed]")
 

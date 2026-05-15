@@ -1,0 +1,18 @@
+[Unit]
+Description=YZXNice - 多学校朋友圈教学系统
+After=network.target
+
+[Service]
+Type=simple
+User=pyuser
+Group=pyuser
+WorkingDirectory=/home/pyuser/projects/yzxnice
+ExecStart=/home/pyuser/.pixi/bin/pixi run uvicorn asgi:fastapi_app --uds /dev/shm/yzxnice.sock --workers 1 --access-log --proxy-headers --forwarded-allow-ips=*
+Restart=always
+RestartSec=5
+Environment=PATH=/home/pyuser/.pixi/bin:/usr/local/bin:/usr/bin:/bin
+
+ExecStopPost=/bin/rm -f /dev/shm/yzxnice.sock
+
+[Install]
+WantedBy=multi-user.target

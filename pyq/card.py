@@ -256,18 +256,15 @@ def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False)
                                                 ),
                                             ).props("flat dense size=sm color=red icon-only")
 
-                            with get_db() as db:
-                                cmt = db.query(Comment).filter(Comment.id == c["id"]).first()
-                                if cmt and cmt.user_id != current_user["user_id"]:
-                                    reply_box = ui.expansion("回复...", value=False).classes("w-full").props("dense")
-                                    with reply_box:
-                                        with ui.row().classes("w-full items-center gap-2"):
-                                            inp = ui.input(placeholder="回复...").classes("flex-1").props("outlined dense")
-                                            ui.button(
-                                                "发送",
-                                                on_click=lambda cid=c["id"]: _add_reply(cid, inp, refresh_fn),
-                                            ).props("dense size=sm color=primary")
-                                    _reply_boxes[c["id"]] = reply_box
+                    reply_box = ui.expansion("回复...", value=False).classes("w-full mt-1").props("dense")
+                    with reply_box:
+                        with ui.row().classes("w-full items-center gap-2"):
+                            reply_inp = ui.input(placeholder="回复...").classes("flex-1").props("outlined dense")
+                            ui.button(
+                                "发送",
+                                on_click=lambda cid=c["id"], ri=reply_inp: _add_reply(cid, ri, refresh_fn),
+                            ).props("dense size=sm color=primary")
+                    _reply_boxes[c["id"]] = reply_box
 
         comment_box = ui.expansion("写评论...", value=False).classes("w-full mt-2").props("dense")
         with comment_box:

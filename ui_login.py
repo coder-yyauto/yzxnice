@@ -4,7 +4,7 @@ from nicegui import APIRouter, app, ui
 from starlette.requests import Request
 
 from core.auth import AuthManager
-from core.security import CaptchaManager
+from core.security import CaptchaManager, LoginAttemptManager
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ async def login_page(request: Request):
 
     with ui.column().classes("w-full min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100"):
         with ui.card().classes("w-96 p-8 shadow-xl"):
-            ui.label("多学校朋友圈教学系统").classes("text-xl font-bold text-center mb-6 text-blue-700")
+            ui.label("教学模拟平台").classes("text-xl font-bold text-center mb-6 text-blue-700")
 
             if expired:
                 ui.label("登录已过期，请重新登录").classes("text-amber-600 text-sm mb-4 text-center")
@@ -75,6 +75,14 @@ async def login_page(request: Request):
                     error_label.classes(remove="hidden")
                     return
 
+                if LoginAttemptManager.is_locked(username):
+                    remaining = LoginAttemptManager.get_lock_remaining(username)
+                    minutes = remaining // 60
+                    error_label.set_text(f"密码错误次数过多，请 {minutes} 分 {remaining % 60} 秒后再试")
+                    error_label.classes(remove="hidden")
+                    refresh_captcha()
+                    return
+
                 if captcha_state["id"] and not CaptchaManager.verify(captcha_state["id"], captcha):
                     error_label.set_text("验证码错误")
                     error_label.classes(remove="hidden")
@@ -84,11 +92,16 @@ async def login_page(request: Request):
                 try:
                     submit_btn.props("loading")
                     user_info = AuthManager.login(username=username, password=password)
+                    LoginAttemptManager.reset(username)
                     AuthManager.set_session(user_info)
                     ui.notify("登录成功", type="positive")
                     ui.navigate.to("/home")
                 except ValueError as e:
-                    error_label.set_text(str(e))
+                    remaining = LoginAttemptManager.record_failure(username)
+                    if remaining > 0:
+                        error_label.set_text(f"{e}，还剩 {remaining} 次尝试机会")
+                    else:
+                        error_label.set_text("密码错误次数过多，请 15 分钟后再试")
                     error_label.classes(remove="hidden")
                     refresh_captcha()
                     logger.warning("登录验证失败: %s", e)
