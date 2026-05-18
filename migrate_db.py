@@ -33,14 +33,15 @@ def migrate():
         for migration in migrations:
             try:
                 conn.execute(text(migration))
+                conn.commit()
                 print(f"执行成功: {migration[:80]}...")
             except Exception as e:
+                conn.rollback()
                 if "already exists" in str(e) or "duplicate column" in str(e):
                     print(f"已存在，跳过: {migration[:80]}...")
                 else:
                     print(f"执行失败: {e}")
                     logger.error("迁移失败: %s", migration[:80], exc_info=True)
-        conn.commit()
     
     print("数据库迁移完成")
 

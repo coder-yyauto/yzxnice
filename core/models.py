@@ -64,9 +64,11 @@ class User(Base):
         try:
             hasher.verify(self.password_hash, password)
             return True
-        except (argon2.exceptions.VerifyMismatchError, argon2.exceptions.VerificationError):
+        except argon2.exceptions.VerifyMismatchError:
             return False
-        except Exception:
+        except argon2.exceptions.VerificationError:
+            return False
+        except argon2.exceptions.InvalidHashError:
             return False
 
     def to_dict(self):
@@ -151,8 +153,6 @@ class Like(Base):
 
     post = relationship("Post", back_populates="likes")
     user = relationship("User")
-
-    __table_args__ = ()
 
 
 class Comment(Base):

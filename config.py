@@ -18,6 +18,7 @@ class Config:
     APP_TITLE = os.getenv("APP_TITLE", "教学模拟平台")
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "static/uploads")
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+    INIT_ADMIN_PASSWORD = os.getenv("INIT_ADMIN_PASSWORD") or DEFAULT_PASSWORD
     
     @property
     def absolute_upload_dir(self):

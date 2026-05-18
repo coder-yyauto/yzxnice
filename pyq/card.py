@@ -186,10 +186,9 @@ def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False)
                                 ui.icon("block", size="xs").classes("mr-1")
                                 ui.label("被屏蔽")
 
-                        ui.html(
-                            f'<span class="{name_cls}">{c.get("author_name", "?")}'
-                            f'</span><span class="text-gray-600">：{c["content"]}</span>'
-                        )
+                        with ui.row().classes("gap-0"):
+                            ui.label(c.get("author_name", "?")).classes(f"text-sm {name_cls}")
+                            ui.label(f'：{c["content"]}').classes("text-sm text-gray-600")
 
                         with ui.row().classes("ml-auto gap-1 items-center"):
                             c_can_del = c_is_author or post_can_manage
@@ -242,10 +241,9 @@ def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False)
                                             ui.icon("block", size="xs").classes("mr-1")
                                             ui.label("被屏蔽")
 
-                                    ui.html(
-                                        f'<span class="{r_name_cls}">{r.get("author_name", "?")}'
-                                        f'</span><span class="text-gray-600">：{r["content"]}</span>'
-                                    )
+                                    with ui.row().classes("gap-0"):
+                                        ui.label(r.get("author_name", "?")).classes(f"text-xs {r_name_cls}")
+                                        ui.label(f'：{r["content"]}').classes("text-xs text-gray-600")
 
                                     with ui.row().classes("ml-auto gap-1"):
                                         if r_is_author:
@@ -365,7 +363,8 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
 
         posts = query.order_by(Post.created_at.desc()).limit(100).all()
 
-        user_org_ids = set()
+        # --- visibility: compute user_org_ids once ---
+        user_org_ids: set[str] = set()
         if user_obj.user_type == "student":
             user_org_ids.add(user_obj.default_org_id)
             cur = db.query(Org).filter(Org.id == user_obj.default_org_id).first()
@@ -380,93 +379,139 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
         elif user_obj.user_type == "admin":
             user_org_ids = set(visible_ids)
 
-        result = []
+        # --- filter posts by visibility ---
+        filtered: list[Post] = []
         for post in posts:
             if post.visibility == "private" and post.user_id != user["user_id"]:
                 continue
-
             if post.visibility == "partial" and post.user_id != user["user_id"]:
                 post_vis = set(post.visible_to_orgs.split(",")) if post.visible_to_orgs else set()
                 if not (user_org_ids & post_vis):
                     continue
-
             if post.excluded_orgs and post.user_id != user["user_id"]:
                 excl = set(post.excluded_orgs.split(","))
                 if user_org_ids & excl:
                     continue
+            filtered.append(post)
 
-            author = db.query(User).filter(User.id == post.user_id).first()
-            org = db.query(Org).filter(Org.id == post.org_id).first()
-            like_count = db.query(Like).filter(Like.post_id == post.id).count()
-            is_liked = (
-                db.query(Like)
-                .filter(Like.post_id == post.id, Like.user_id == user["user_id"])
-                .first()
-                is not None
-            )
-            comments = (
-                db.query(Comment)
-                .filter(Comment.post_id == post.id)
-                .order_by(Comment.created_at.asc())
+        if not filtered:
+            return []
+
+        # --- batch-load all related data ---
+        post_ids = [p.id for p in filtered]
+        all_user_ids: set[str] = {p.user_id for p in filtered}
+
+        # like counts + is_liked
+        like_rows = (
+            db.query(Like.post_id, Like.user_id)
+            .filter(Like.post_id.in_(post_ids))
+            .all()
+        )
+        like_count_map: dict[str, int] = {}
+        is_liked_set: set[str] = set()
+        for post_id, uid in like_rows:
+            like_count_map[post_id] = like_count_map.get(post_id, 0) + 1
+            if uid == user["user_id"]:
+                is_liked_set.add(post_id)
+
+        # comments
+        all_comments = (
+            db.query(Comment)
+            .filter(Comment.post_id.in_(post_ids))
+            .order_by(Comment.created_at.asc())
+            .all()
+        )
+        comment_ids = [c.id for c in all_comments]
+        for c in all_comments:
+            all_user_ids.add(c.user_id)
+
+        # replies
+        all_replies: list[Reply] = []
+        if comment_ids:
+            all_replies = (
+                db.query(Reply)
+                .filter(Reply.comment_id.in_(comment_ids))
+                .order_by(Reply.created_at.asc())
                 .all()
             )
-            comments_data = []
-            for c in comments:
-                ca = db.query(User).filter(User.id == c.user_id).first()
-                replies = (
-                    db.query(Reply)
-                    .filter(Reply.comment_id == c.id)
-                    .order_by(Reply.created_at.asc())
-                    .all()
-                )
-                replies_data = []
-                for r in replies:
-                    ra = db.query(User).filter(User.id == r.user_id).first()
-                    replies_data.append(
-                        {
-                            "id": r.id,
-                            "user_id": r.user_id,
-                            "user_type": ra.user_type if ra else "",
-                            "content": r.content,
-                            "author_name": (ra.display_name or ra.username) if ra else "未知",
-                            "is_hidden_by_admin": r.is_hidden_by_admin,
-                            "is_deleted_by_author": r.is_deleted_by_author,
-                        }
-                    )
+            for r in all_replies:
+                all_user_ids.add(r.user_id)
 
-                comments_data.append(
-                    {
-                        "id": c.id,
-                        "user_id": c.user_id,
-                        "user_type": ca.user_type if ca else "",
-                        "content": c.content,
-                        "author_name": (ca.display_name or ca.username) if ca else "未知",
-                        "is_hidden_by_admin": c.is_hidden_by_admin,
-                        "is_deleted_by_author": c.is_deleted_by_author,
-                        "replies": replies_data,
-                    }
-                )
+        # users (authors)
+        users_map: dict[str, User] = {}
+        if all_user_ids:
+            user_rows = db.query(User).filter(User.id.in_(list(all_user_ids))).all()
+            users_map = {u.id: u for u in user_rows}
 
-            result.append(
-                {
-                    "id": post.id,
-                    "user_id": post.user_id,
-                    "user_type": author.user_type if author else "",
-                    "author_name": (author.display_name or author.username) if author else "未知",
-                    "content": post.content,
-                    "images": post.images.split(",") if post.images else [],
-                    "org_id": post.org_id,
-                    "org_name": org.name if org else "",
-                    "like_count": like_count,
-                    "is_liked": is_liked,
-                    "comment_count": len(comments_data),
-                    "comments": comments_data,
-                    "is_hidden_by_admin": post.is_hidden_by_admin,
-                    "visibility": post.visibility or "public",
-                    "show_location": post.show_location if post.show_location is not None else True,
-                    "time_ago": _time_ago(post.created_at),
-                }
-            )
+        # orgs
+        all_org_ids: set[str] = {p.org_id for p in filtered} | {
+            p.visible_org_id for p in filtered if p.visible_org_id
+        }
+        orgs_map: dict[str, Org] = {}
+        if all_org_ids:
+            org_rows = db.query(Org).filter(Org.id.in_(list(all_org_ids))).all()
+            orgs_map = {o.id: o for o in org_rows}
+
+        # --- assemble result ---
+        # index comments by post_id
+        comments_by_post: dict[str, list[Comment]] = {}
+        for c in all_comments:
+            comments_by_post.setdefault(c.post_id, []).append(c)
+
+        # index replies by comment_id
+        replies_by_comment: dict[str, list[Reply]] = {}
+        for r in all_replies:
+            replies_by_comment.setdefault(r.comment_id, []).append(r)
+
+        result: list[dict] = []
+        for post in filtered:
+            author = users_map.get(post.user_id)
+            org = orgs_map.get(post.org_id)
+
+            comments_data: list[dict] = []
+            for c in comments_by_post.get(post.id, []):
+                ca = users_map.get(c.user_id)
+                replies_data: list[dict] = []
+                for r in replies_by_comment.get(c.id, []):
+                    ra = users_map.get(r.user_id)
+                    replies_data.append({
+                        "id": r.id,
+                        "user_id": r.user_id,
+                        "user_type": ra.user_type if ra else "",
+                        "content": r.content,
+                        "author_name": (ra.display_name or ra.username) if ra else "未知",
+                        "is_hidden_by_admin": r.is_hidden_by_admin,
+                        "is_deleted_by_author": r.is_deleted_by_author,
+                    })
+                comments_data.append({
+                    "id": c.id,
+                    "user_id": c.user_id,
+                    "user_type": ca.user_type if ca else "",
+                    "content": c.content,
+                    "author_name": (ca.display_name or ca.username) if ca else "未知",
+                    "is_hidden_by_admin": c.is_hidden_by_admin,
+                    "is_deleted_by_author": c.is_deleted_by_author,
+                    "replies": replies_data,
+                })
+
+            result.append({
+                "id": post.id,
+                "user_id": post.user_id,
+                "user_type": author.user_type if author else "",
+                "author_name": (author.display_name or author.username) if author else "未知",
+                "content": post.content,
+                "images": post.images.split(",") if post.images else [],
+                "org_id": post.org_id,
+                "org_name": org.name if org else "",
+                "like_count": like_count_map.get(post.id, 0),
+                "is_liked": post.id in is_liked_set,
+                "comment_count": len(comments_by_post.get(post.id, [])),
+                "comments": comments_data,
+                "is_hidden_by_admin": post.is_hidden_by_admin,
+                "visibility": post.visibility or "public",
+                "show_location": post.show_location if post.show_location is not None else True,
+                "time_ago": _time_ago(post.created_at),
+            })
         return result
 
 
@@ -539,17 +584,6 @@ def _delete_comment_by_author(comment_id, post_id, refresh_fn):
             comment.is_deleted_by_author = True
             db.commit()
     ui.notify("评论已删除", type="info")
-    if refresh_fn:
-        refresh_fn()
-
-
-def _delete_comment(comment_id, post_id, refresh_fn):
-    with get_db() as db:
-        c = db.query(Comment).filter(Comment.id == comment_id).first()
-        if c:
-            db.delete(c)
-            db.commit()
-    ui.notify("已删除", type="info")
     if refresh_fn:
         refresh_fn()
 

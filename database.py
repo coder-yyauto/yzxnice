@@ -62,7 +62,11 @@ def _migrate_post_visibility():
         for col_name, col_type, default in new_cols:
             try:
                 conn.execute(text(f"ALTER TABLE post ADD COLUMN {col_name} {col_type} DEFAULT {default}"))
-            except Exception:
-                pass
-        conn.commit()
+                conn.commit()
+                logger.info("Migration: added column post.%s", col_name)
+            except Exception as e:
+                conn.rollback()
+                msg = str(e)
+                if "already exists" not in msg.lower():
+                    logger.warning("Migration column %s failed: %s", col_name, e)
     logger.info("post表字段迁移完成")

@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import base64
 import io
 import os
 import random
@@ -10,11 +13,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 from config import config
 
-TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
+TEST_MODE: bool = os.getenv("TEST_MODE", "false").lower() == "true"
 
 
 class PasswordManager:
-    _hasher = argon2.PasswordHasher(time_cost=2, memory_cost=65536, parallelism=2, hash_len=32)
+    _hasher: argon2.PasswordHasher = argon2.PasswordHasher(
+        time_cost=2, memory_cost=65536, parallelism=2, hash_len=32
+    )
 
     @classmethod
     def hash_password(cls, password: str) -> str:
@@ -25,21 +30,23 @@ class PasswordManager:
         try:
             cls._hasher.verify(hashed_password, password)
             return True
-        except (argon2.exceptions.VerifyMismatchError, argon2.exceptions.VerificationError):
+        except argon2.exceptions.VerifyMismatchError:
             return False
-        except Exception:
+        except argon2.exceptions.VerificationError:
+            return False
+        except argon2.exceptions.InvalidHashError:
             return False
 
 
 class LoginAttemptManager:
     _attempts: dict[str, list[float]] = {}
-    MAX_ATTEMPTS = 5
-    LOCK_SECONDS = 15 * 60
+    MAX_ATTEMPTS: int = 5
+    LOCK_SECONDS: int = 15 * 60
 
     @classmethod
     def is_locked(cls, username: str) -> bool:
         cls._cleanup(username)
-        attempts = cls._attempts.get(username, [])
+        attempts: list[float] = cls._attempts.get(username, [])
         return len(attempts) >= cls.MAX_ATTEMPTS
 
     @classmethod
@@ -48,26 +55,26 @@ class LoginAttemptManager:
         if username not in cls._attempts:
             cls._attempts[username] = []
         cls._attempts[username].append(time.time())
-        remaining = cls.MAX_ATTEMPTS - len(cls._attempts[username])
+        remaining: int = cls.MAX_ATTEMPTS - len(cls._attempts[username])
         return max(remaining, 0)
 
     @classmethod
-    def reset(cls, username: str):
+    def reset(cls, username: str) -> None:
         cls._attempts.pop(username, None)
 
     @classmethod
     def get_lock_remaining(cls, username: str) -> int:
         cls._cleanup(username)
-        attempts = cls._attempts.get(username, [])
+        attempts: list[float] = cls._attempts.get(username, [])
         if len(attempts) < cls.MAX_ATTEMPTS:
             return 0
-        elapsed = time.time() - attempts[0]
+        elapsed: float = time.time() - attempts[0]
         return max(int(cls.LOCK_SECONDS - elapsed), 0)
 
     @classmethod
-    def _cleanup(cls, username: str):
-        now = time.time()
-        attempts = cls._attempts.get(username, [])
+    def _cleanup(cls, username: str) -> None:
+        now: float = time.time()
+        attempts: list[float] = cls._attempts.get(username, [])
         cls._attempts[username] = [t for t in attempts if now - t < cls.LOCK_SECONDS]
         if not cls._attempts[username]:
             cls._attempts.pop(username, None)
@@ -78,18 +85,18 @@ class CaptchaManager:
 
     @classmethod
     def generate(cls) -> tuple[str, str, str]:
-        captcha_id = str(uuid.uuid4())
+        captcha_id: str = str(uuid.uuid4())
+        captcha_text: str
         if TEST_MODE:
             captcha_text = "1234"
         else:
             captcha_text = "".join(random.choices(string.digits, k=4))
-        image = cls._generate_image(captcha_text)
-        buffer = io.BytesIO()
+        image: Image.Image = cls._generate_image(captcha_text)
+        buffer: io.BytesIO = io.BytesIO()
         image.save(buffer, format="PNG")
-        import base64
 
-        image_base64 = base64.b64encode(buffer.getvalue()).decode()
-        image_data_url = f"data:image/png;base64,{image_base64}"
+        image_base64: str = base64.b64encode(buffer.getvalue()).decode()
+        image_data_url: str = f"data:image/png;base64,{image_base64}"
         cls._captchas[captcha_id] = (captcha_text, time.time())
         cls._cleanup_expired()
         return captcha_id, captcha_text, image_data_url
@@ -100,6 +107,8 @@ class CaptchaManager:
             return True
         if captcha_id not in cls._captchas:
             return False
+        stored_text: str
+        created_time: float
         stored_text, created_time = cls._captchas[captcha_id]
         if time.time() - created_time > 300:
             del cls._captchas[captcha_id]
@@ -109,35 +118,41 @@ class CaptchaManager:
 
     @classmethod
     def _generate_image(cls, text: str) -> Image.Image:
-        width, height = 140, 44
-        image = Image.new("RGB", (width, height), color=(240, 242, 245))
-        draw = ImageDraw.Draw(image)
+        width: int = 140
+        height: int = 44
+        image: Image.Image = Image.new("RGB", (width, height), color=(240, 242, 245))
+        draw: ImageDraw.ImageDraw = ImageDraw.Draw(image)
+        font: ImageFont.FreeTypeFont | ImageFont.ImageFont
         try:
             font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
         except Exception:
             font = ImageFont.load_default()
-        char_spacing = 28
-        total_w = char_spacing * (len(text) - 1)
-        text_x = (width - total_w) // 2
-        text_y = (height - 24) // 2
+        char_spacing: int = 28
+        total_w: int = char_spacing * (len(text) - 1)
+        text_x: float = (width - total_w) // 2
+        text_y: float = (height - 24) // 2
         for _ in range(100):
-            x = random.randint(0, width - 1)
-            y = random.randint(0, height - 1)
+            x: int = random.randint(0, width - 1)
+            y: int = random.randint(0, height - 1)
             draw.point(
                 (x, y),
                 fill=(random.randint(150, 200), random.randint(150, 200), random.randint(150, 200)),
             )
         for i, char in enumerate(text):
-            x = text_x + i * char_spacing + random.randint(-3, 3)
-            y = text_y + random.randint(-3, 3)
-            color = (random.randint(30, 100), random.randint(30, 100), random.randint(30, 100))
+            x: int = int(text_x + i * char_spacing + random.randint(-3, 3))
+            y: int = int(text_y + random.randint(-3, 3))
+            color: tuple[int, int, int] = (
+                random.randint(30, 100),
+                random.randint(30, 100),
+                random.randint(30, 100),
+            )
             draw.text((x, y), char, font=font, fill=color)
         return image
 
     @classmethod
-    def _cleanup_expired(cls):
-        current_time = time.time()
-        expired_ids = [
+    def _cleanup_expired(cls) -> None:
+        current_time: float = time.time()
+        expired_ids: list[str] = [
             cid for cid, (_, created_time) in cls._captchas.items() if current_time - created_time > 300
         ]
         for cid in expired_ids:
