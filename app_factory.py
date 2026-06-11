@@ -8,7 +8,7 @@ from core.auth_middleware import AuthMiddleware
 from database import get_db, init_db
 
 if TYPE_CHECKING:
-    from core.models import Org
+    pass
 
 
 def create_app() -> None:

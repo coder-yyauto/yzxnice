@@ -47,87 +47,85 @@ async def home_page():
         ui.column().classes("w-full min-h-screen bg-[#ededed] items-center"),
         ui.column().classes("w-full max-w-[428px] px-4 pt-4 pb-8"),
     ):
-            with ui.row().classes("w-full items-center justify-between mb-3"):
-                ui.label("朋友圈").classes("text-lg font-bold text-gray-800")
-                with ui.row().classes("items-center gap-2"):
-                    ui.button(icon="photo_camera", on_click=lambda: ui.navigate.to("/publish")).props(
-                        "flat dense size=sm color=grey-7"
-                    ).tooltip("发布动态")
+        with ui.row().classes("w-full items-center justify-between mb-3"):
+            ui.label("朋友圈").classes("text-lg font-bold text-gray-800")
+            with ui.row().classes("items-center gap-2"):
+                ui.button(icon="photo_camera", on_click=lambda: ui.navigate.to("/publish")).props(
+                    "flat dense size=sm color=grey-7"
+                ).tooltip("发布动态")
 
-            if is_teacher_view and school_id:
-                with get_db() as db:
-                    _grades_data = []
-                    for grade in get_grades(db, school_id):
-                        classes = get_classes(db, grade.id)
-                        _grades_data.append(
-                            {
-                                "id": grade.id,
-                                "name": grade.name,
-                                "classes": [{"id": c.id, "name": c.name} for c in classes],
-                            }
-                        )
+        if is_teacher_view and school_id:
+            with get_db() as db:
+                _grades_data = []
+                for grade in get_grades(db, school_id):
+                    classes = get_classes(db, grade.id)
+                    _grades_data.append(
+                        {
+                            "id": grade.id,
+                            "name": grade.name,
+                            "classes": [{"id": c.id, "name": c.name} for c in classes],
+                        }
+                    )
 
-                filter_label = (
-                    ui.button("查看范围: 全部", on_click=lambda: _open_filter_dialog())
-                    .props("flat no-caps dense size=sm color=grey-7")
-                    .classes("text-xs")
-                )
+            filter_label = (
+                ui.button("查看范围: 全部", on_click=lambda: _open_filter_dialog())
+                .props("flat no-caps dense size=sm color=grey-7")
+                .classes("text-xs")
+            )
 
-                def _open_filter_dialog():
-                    with ui.dialog() as dialog, ui.card().classes("w-80 p-4"):
-                        ui.label("查看范围").classes("text-base font-bold mb-3")
+            def _open_filter_dialog():
+                with ui.dialog() as dialog, ui.card().classes("w-80 p-4"):
+                    ui.label("查看范围").classes("text-base font-bold mb-3")
 
-                        with ui.column().classes("w-full gap-0"):
-                            ui.button(
-                                "全部",
-                                on_click=lambda: _do_select([], "查看范围: 全部", dialog),
-                            ).props("flat no-caps dense align=left").classes("w-full text-left")
+                    with ui.column().classes("w-full gap-0"):
+                        ui.button(
+                            "全部",
+                            on_click=lambda: _do_select([], "查看范围: 全部", dialog),
+                        ).props("flat no-caps dense align=left").classes("w-full text-left")
 
-                            for g in _grades_data:
-                                with ui.expansion(g["name"], group="filter_tree").classes("w-full"):
+                        for g in _grades_data:
+                            with ui.expansion(g["name"], group="filter_tree").classes("w-full"):
+                                ui.button(
+                                    f"{g['name']}(全选)",
+                                    on_click=lambda grade=g: _do_select(
+                                        [c["id"] for c in grade["classes"]], f"查看范围: {grade['name']}", dialog
+                                    ),
+                                ).props("flat no-caps dense align=left color=primary").classes(
+                                    "w-full text-left text-sm"
+                                )
+                                for cls_ in g["classes"]:
                                     ui.button(
-                                        f"{g['name']}(全选)",
-                                        on_click=lambda grade=g: _do_select(
-                                            [c["id"] for c in grade["classes"]], f"查看范围: {grade['name']}", dialog
-                                        ),
-                                    ).props("flat no-caps dense align=left color=primary").classes(
-                                        "w-full text-left text-sm"
-                                    )
-                                    for cls_ in g["classes"]:
-                                        ui.button(
-                                            cls_["name"],
-                                            on_click=lambda c=cls_: _do_select(
-                                                [c["id"]], f"查看范围: {c['name']}", dialog
-                                            ),
-                                        ).props("flat no-caps dense align=left").classes("w-full text-left text-sm")
-                    dialog.open()
+                                        cls_["name"],
+                                        on_click=lambda c=cls_: _do_select([c["id"]], f"查看范围: {c['name']}", dialog),
+                                    ).props("flat no-caps dense align=left").classes("w-full text-left text-sm")
+                dialog.open()
 
-                def _do_select(ids, label_text, dialog):
-                    if ids:
-                        filter_state["org_ids"] = ids
-                    else:
-                        filter_state["org_ids"] = None
-                    filter_label.set_text(label_text)
-                    dialog.close()
-                    refresh_posts()
+            def _do_select(ids, label_text, dialog):
+                if ids:
+                    filter_state["org_ids"] = ids
+                else:
+                    filter_state["org_ids"] = None
+                filter_label.set_text(label_text)
+                dialog.close()
+                refresh_posts()
 
-            def refresh_posts():
-                if post_container:
-                    post_container.clear()
-                    with post_container:
-                        posts = load_posts(user, filter_state.get("org_ids"))
-                        if not posts:
-                            ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
-                        for pd in posts:
-                            render_post_card(pd, user, refresh_posts)
+        def refresh_posts():
+            if post_container:
+                post_container.clear()
+                with post_container:
+                    posts = load_posts(user, filter_state.get("org_ids"))
+                    if not posts:
+                        ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
+                    for pd in posts:
+                        render_post_card(pd, user, refresh_posts)
 
-            post_container = ui.column().classes("w-full")
-            with post_container:
-                posts = load_posts(user, filter_state.get("org_ids"))
-                if not posts:
-                    ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
-                for pd in posts:
-                    render_post_card(pd, user, refresh_posts)
+        post_container = ui.column().classes("w-full")
+        with post_container:
+            posts = load_posts(user, filter_state.get("org_ids"))
+            if not posts:
+                ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
+            for pd in posts:
+                render_post_card(pd, user, refresh_posts)
 
 
 @router.page("/publish")
@@ -220,85 +218,85 @@ async def publish_page():
         ui.column().classes("w-full min-h-screen bg-[#ededed] items-center"),
         ui.column().classes("w-full max-w-[428px]"),
     ):
-            with ui.row().classes(
-                "w-full h-12 bg-white border-b border-gray-200 items-center justify-between px-4 sticky top-0 z-50"
-            ):
-                ui.button("取消", on_click=lambda: ui.navigate.to("/home")).props("flat no-caps color=grey-7 text-base")
-                ui.button("发表", on_click=handle_publish).props(
-                    "flat no-caps color=green-600 text-green-600 text-base font-bold"
+        with ui.row().classes(
+            "w-full h-12 bg-white border-b border-gray-200 items-center justify-between px-4 sticky top-0 z-50"
+        ):
+            ui.button("取消", on_click=lambda: ui.navigate.to("/home")).props("flat no-caps color=grey-7 text-base")
+            ui.button("发表", on_click=handle_publish).props(
+                "flat no-caps color=green-600 text-green-600 text-base font-bold"
+            )
+
+        with ui.column().classes("w-full bg-white"):
+            with ui.column().classes("w-full px-4 pt-4"):
+                content_input = (
+                    ui.textarea(placeholder="这一刻的想法...")
+                    .classes("w-full")
+                    .props("borderless rows=4 dense")
+                    .style("font-size: 15px; padding: 0;")
                 )
 
-            with ui.column().classes("w-full bg-white"):
-                with ui.column().classes("w-full px-4 pt-4"):
-                    content_input = (
-                        ui.textarea(placeholder="这一刻的想法...")
-                        .classes("w-full")
-                        .props("borderless rows=4 dense")
-                        .style("font-size: 15px; padding: 0;")
-                    )
+                preview_container = ui.row().classes("flex flex-wrap gap-2")
 
-                    preview_container = ui.row().classes("flex flex-wrap gap-2")
+                def refresh_preview():
+                    preview_container.clear()
+                    with preview_container:
+                        for img in state["files"]:
+                            with ui.element("div").classes("w-24 h-24 relative rounded overflow-hidden"):
+                                ui.image(f"/static/uploads/{img}").classes("w-full h-full object-cover")
+                                ui.button(
+                                    icon="close",
+                                    on_click=lambda i=img: _remove_image(i, state, refresh_preview),
+                                ).props("flat dense round size=xs color=white").classes(
+                                    "absolute top-0 right-0 bg-black/40 rounded-full min-w-[20px] min-h-[20px]"
+                                )
 
-                    def refresh_preview():
-                        preview_container.clear()
-                        with preview_container:
-                            for img in state["files"]:
-                                with ui.element("div").classes("w-24 h-24 relative rounded overflow-hidden"):
-                                    ui.image(f"/static/uploads/{img}").classes("w-full h-full object-cover")
-                                    ui.button(
-                                        icon="close",
-                                        on_click=lambda i=img: _remove_image(i, state, refresh_preview),
-                                    ).props("flat dense round size=xs color=white").classes(
-                                        "absolute top-0 right-0 bg-black/40 rounded-full min-w-[20px] min-h-[20px]"
-                                    )
+                refresh_preview()
 
-                    refresh_preview()
+                ui.upload(
+                    on_upload=handle_upload,
+                    auto_upload=True,
+                    multiple=True,
+                ).props("accept=image/* label=添加图片 color=grey-4 flat").classes("w-full").style(
+                    "border: 2px dashed #d1d5db; border-radius: 8px;"
+                )
 
-                    ui.upload(
-                        on_upload=handle_upload,
-                        auto_upload=True,
-                        multiple=True,
-                    ).props("accept=image/* label=添加图片 color=grey-4 flat").classes("w-full").style(
-                        "border: 2px dashed #d1d5db; border-radius: 8px;"
-                    )
+            ui.element("div").classes("h-2 bg-[#ededed]")
 
-                ui.element("div").classes("h-2 bg-[#ededed]")
+            with (
+                ui.row()
+                .classes(
+                    "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
+                )
+                .on("click", lambda: _show_location_dialog(state, location_label))
+            ):
+                ui.label("所在位置").classes("text-sm text-gray-800")
+                with ui.row().classes("items-center gap-1"):
+                    location_label = ui.label("当前位置").classes("text-sm text-gray-500")
+                    ui.icon("chevron_right").classes("text-gray-400 text-lg")
 
-                with (
-                    ui.row()
-                    .classes(
-                        "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
-                    )
-                    .on("click", lambda: _show_location_dialog(state, location_label))
-                ):
-                    ui.label("所在位置").classes("text-sm text-gray-800")
-                    with ui.row().classes("items-center gap-1"):
-                        location_label = ui.label("当前位置").classes("text-sm text-gray-500")
-                        ui.icon("chevron_right").classes("text-gray-400 text-lg")
+            with (
+                ui.row()
+                .classes(
+                    "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
+                )
+                .on("click", lambda: _show_visibility_dialog(state, vis_label, org_tree))
+            ):
+                ui.label("谁可以看").classes("text-sm text-gray-800")
+                with ui.row().classes("items-center gap-1"):
+                    vis_label = ui.label("公开").classes("text-sm text-gray-500")
+                    ui.icon("chevron_right").classes("text-gray-400 text-lg")
 
-                with (
-                    ui.row()
-                    .classes(
-                        "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
-                    )
-                    .on("click", lambda: _show_visibility_dialog(state, vis_label, org_tree))
-                ):
-                    ui.label("谁可以看").classes("text-sm text-gray-800")
-                    with ui.row().classes("items-center gap-1"):
-                        vis_label = ui.label("公开").classes("text-sm text-gray-500")
-                        ui.icon("chevron_right").classes("text-gray-400 text-lg")
-
-                with (
-                    ui.row()
-                    .classes(
-                        "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
-                    )
-                    .on("click", lambda: _show_exclusion_dialog(state, excl_label, org_tree))
-                ):
-                    ui.label("不给谁看").classes("text-sm text-gray-800")
-                    with ui.row().classes("items-center gap-1"):
-                        excl_label = ui.label("不限").classes("text-sm text-gray-500")
-                        ui.icon("chevron_right").classes("text-gray-400 text-lg")
+            with (
+                ui.row()
+                .classes(
+                    "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
+                )
+                .on("click", lambda: _show_exclusion_dialog(state, excl_label, org_tree))
+            ):
+                ui.label("不给谁看").classes("text-sm text-gray-800")
+                with ui.row().classes("items-center gap-1"):
+                    excl_label = ui.label("不限").classes("text-sm text-gray-500")
+                    ui.icon("chevron_right").classes("text-gray-400 text-lg")
 
 
 def _remove_image(img_name, state, refresh_fn):

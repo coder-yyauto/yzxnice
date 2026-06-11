@@ -134,9 +134,10 @@ def _render_image_grid(images):
 
 def _show_image_viewer(img_name):
     with (
-        ui.dialog() as dialog, ui.element("div")
+        ui.dialog() as dialog,
+        ui.element("div")
         .classes("fixed inset-0 bg-black/95 flex items-center justify-center")
-        .style("width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;")
+        .style("width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;"),
     ):
         ui.button(
             icon="close",
@@ -173,8 +174,7 @@ def _render_comment_header(c: dict) -> tuple[str, str]:
     name_cls = "text-blue-500 font-bold" if is_teacher else "text-blue-500"
     if c.get("is_hidden_by_admin"):
         with ui.element("span").classes(
-            "inline-flex items-center bg-red-100 text-red-600 text-xs "
-            "px-2 py-0.5 rounded-full font-bold mr-1"
+            "inline-flex items-center bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold mr-1"
         ):
             ui.icon("block", size="xs").classes("mr-1")
             ui.label("被屏蔽")
@@ -203,6 +203,7 @@ def _render_comment_actions(c: dict, current_user: dict, post_can_manage: bool, 
     ui.button(icon="reply", on_click=lambda cid=c["id"]: _toggle_reply_box(cid)).props(
         "flat dense size=sm color=blue icon-only"
     )
+
 
 def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False):
     comments = post_data.get("comments", [])
@@ -281,7 +282,7 @@ def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False)
                                     if r.get("is_hidden_by_admin"):
                                         with ui.element("span").classes(
                                             "inline-flex items-center bg-red-100 text-red-600 text-xs "
-                                "px-2 py-0.5 rounded-full font-bold mr-1"
+                                            "px-2 py-0.5 rounded-full font-bold mr-1"
                                         ):
                                             ui.icon("block", size="xs").classes("mr-1")
                                             ui.label("被屏蔽")

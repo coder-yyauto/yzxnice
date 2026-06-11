@@ -173,10 +173,10 @@ def _print_account_info():
                     .first()
                 )
                 if cls:
-                        print(
-                            f"  例: {cls.name} 学生 "
-                            f"{code}{cls.grade_number}{cls.class_number}01~{code}{cls.grade_number}{cls.class_number}40"
-                        )
+                    print(
+                        f"  例: {cls.name} 学生 "
+                        f"{code}{cls.grade_number}{cls.class_number}01~{code}{cls.grade_number}{cls.class_number}40"
+                    )
 
 
 if __name__ == "__main__":

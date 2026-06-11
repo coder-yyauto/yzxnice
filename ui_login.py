@@ -41,9 +41,12 @@ async def login_page(request: Request):
 
     expired = request.query_params.get("reason") == "expired"
 
-    with ui.column().classes(
-        "w-full min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100"
-    ), ui.card().classes("w-96 p-8 shadow-xl"):
+    with (
+        ui.column().classes(
+            "w-full min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100"
+        ),
+        ui.card().classes("w-96 p-8 shadow-xl"),
+    ):
         ui.label("教学模拟平台").classes("text-xl font-bold text-center mb-6 text-blue-700")
 
         if expired:

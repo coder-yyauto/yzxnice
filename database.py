@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine
@@ -42,8 +42,6 @@ def get_db():
 
 
 def init_db():
-    from core.models import Comment, Like, Org, Post, Reply, User, UserRole
-
     Base.metadata.create_all(bind=engine, checkfirst=True)
     _migrate_post_visibility()
     _migrate_user_nickname()

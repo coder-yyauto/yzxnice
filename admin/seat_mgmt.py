@@ -76,35 +76,35 @@ async def seat_management():
         ui.column().classes("w-full min-h-screen bg-gray-50 items-center"),
         ui.column().classes("w-full max-w-4xl p-6"),
     ):
-            ui.label("席位管理").classes("text-xl font-bold mb-4")
+        ui.label("席位管理").classes("text-xl font-bold mb-4")
 
-            with get_db() as db:
-                managed_ids = _get_managed_class_ids(user_data, db)
-                if not managed_ids:
-                    ui.label("没有可管理的班级").classes("text-gray-400")
-                    return
+        with get_db() as db:
+            managed_ids = _get_managed_class_ids(user_data, db)
+            if not managed_ids:
+                ui.label("没有可管理的班级").classes("text-gray-400")
+                return
 
-                schools = {}
-                for cid in managed_ids:
-                    cls = db.query(Org).filter(Org.id == cid).first()
-                    if not cls:
-                        continue
-                    ancestors = get_org_ancestors(db, cid)
-                    school = None
-                    for aid in ancestors:
-                        org = db.query(Org).filter(Org.id == aid).first()
-                        if org and org.org_type == "school":
-                            school = org
-                            break
-                    if school:
-                        schools.setdefault(school.id, {"obj": school, "classes": []})
-                        schools[school.id]["classes"].append(cls)
+            schools = {}
+            for cid in managed_ids:
+                cls = db.query(Org).filter(Org.id == cid).first()
+                if not cls:
+                    continue
+                ancestors = get_org_ancestors(db, cid)
+                school = None
+                for aid in ancestors:
+                    org = db.query(Org).filter(Org.id == aid).first()
+                    if org and org.org_type == "school":
+                        school = org
+                        break
+                if school:
+                    schools.setdefault(school.id, {"obj": school, "classes": []})
+                    schools[school.id]["classes"].append(cls)
 
-            for _sid, sdata in sorted(schools.items(), key=lambda x: x[1]["obj"].name):
-                school = sdata["obj"]
-                with ui.expansion(f"{school.name} ({school.school_code})", icon="school").classes("w-full"):
-                    for cls_obj in sorted(sdata["classes"], key=lambda c: (c.grade_number or 0, c.class_number or 0)):
-                        _render_class_seat_row(cls_obj)
+        for _sid, sdata in sorted(schools.items(), key=lambda x: x[1]["obj"].name):
+            school = sdata["obj"]
+            with ui.expansion(f"{school.name} ({school.school_code})", icon="school").classes("w-full"):
+                for cls_obj in sorted(sdata["classes"], key=lambda c: (c.grade_number or 0, c.class_number or 0)):
+                    _render_class_seat_row(cls_obj)
 
 
 def _render_class_seat_row(cls_obj: Org):
@@ -165,9 +165,7 @@ def _export_csv(class_id: str):
 def _clear_seats(class_id: str, class_name: str):
     with get_db() as db:
         students = (
-            db.query(User)
-            .filter(User.default_org_id == class_id, User.user_type == "student", User.is_active)
-            .all()
+            db.query(User).filter(User.default_org_id == class_id, User.user_type == "student", User.is_active).all()
         )
         count = 0
         for s in students:
@@ -209,9 +207,7 @@ async def _handle_csv_upload(e, class_id: str, class_name: str):
             if not username:
                 continue
             student = (
-                db.query(User)
-                .filter(User.username == username, User.user_type == "student", User.is_active)
-                .first()
+                db.query(User).filter(User.username == username, User.user_type == "student", User.is_active).first()
             )
             if not student or student.default_org_id != class_id:
                 continue

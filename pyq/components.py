@@ -2,7 +2,6 @@ from nicegui import app, ui
 
 
 def render_navbar():
-
     user_type = app.storage.user.get("user_type", "student")
     nickname = app.storage.user.get("nickname", "")
     display_name = nickname or app.storage.user.get("display_name", "") or app.storage.user.get("username", "")
@@ -34,7 +33,6 @@ def render_navbar():
 
 
 def render_admin_navbar(active=""):
-
     nickname = app.storage.user.get("nickname", "")
     display_name = nickname or app.storage.user.get("display_name", "") or app.storage.user.get("username", "")
 
