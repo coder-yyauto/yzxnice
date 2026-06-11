@@ -4,8 +4,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import config
-from database import init_db, get_db
 from core.models import Org, User, UserRole
+from database import get_db, init_db
 
 
 def init_data():
@@ -89,9 +89,7 @@ def _gen_all_students(db):
             classes = db.query(Org).filter(Org.org_type == "class", Org.parent_id == grade.id).all()
             for cls in classes:
                 existing_count = (
-                    db.query(User)
-                    .filter(User.default_org_id == cls.id, User.user_type == "student")
-                    .count()
+                    db.query(User).filter(User.default_org_id == cls.id, User.user_type == "student").count()
                 )
                 if existing_count >= 40:
                     continue
@@ -163,17 +161,22 @@ def _print_account_info():
             print(f"  教师: T{code}001")
             print(f"  管理员: T{code}admin")
             print(f"  学生示例: {code}1101 ~ {code}1140 (格式: 学校代码+年级+班级+两位序号)")
-            print(f"  学生密码: 系统默认密码")
+            print("  学生密码: 系统默认密码")
 
-            grade = db.query(Org).filter(
-                Org.org_type == "grade", Org.parent_id == school.id, Org.grade_number == 1
-            ).first()
+            grade = (
+                db.query(Org).filter(Org.org_type == "grade", Org.parent_id == school.id, Org.grade_number == 1).first()
+            )
             if grade:
-                cls = db.query(Org).filter(
-                    Org.org_type == "class", Org.parent_id == grade.id, Org.class_number == 1
-                ).first()
+                cls = (
+                    db.query(Org)
+                    .filter(Org.org_type == "class", Org.parent_id == grade.id, Org.class_number == 1)
+                    .first()
+                )
                 if cls:
-                    print(f"  例: {cls.name} 学生 {code}{cls.grade_number}{cls.class_number}01~{code}{cls.grade_number}{cls.class_number}40")
+                        print(
+                            f"  例: {cls.name} 学生 "
+                            f"{code}{cls.grade_number}{cls.class_number}01~{code}{cls.grade_number}{cls.class_number}40"
+                        )
 
 
 if __name__ == "__main__":

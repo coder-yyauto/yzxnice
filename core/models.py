@@ -40,8 +40,9 @@ class User(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(String(80), unique=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(512), nullable=False)
     display_name = Column(String(100), nullable=True)
+    nickname = Column(String(100), nullable=True)
     user_type = Column(String(20), nullable=False, default="student")
     default_org_id = Column(String(36), ForeignKey("org.id"), nullable=True)
     is_active = Column(Boolean, default=True)
@@ -52,30 +53,21 @@ class User(Base):
     posts = relationship("Post", back_populates="author")
 
     def set_password(self, password: str):
-        import argon2
+        from core.security import PasswordManager
 
-        hasher = argon2.PasswordHasher(time_cost=2, memory_cost=65536, parallelism=2, hash_len=32)
-        self.password_hash = hasher.hash(password)
+        self.password_hash = PasswordManager.hash_password(password)
 
     def check_password(self, password: str) -> bool:
-        import argon2
+        from core.security import PasswordManager
 
-        hasher = argon2.PasswordHasher()
-        try:
-            hasher.verify(self.password_hash, password)
-            return True
-        except argon2.exceptions.VerifyMismatchError:
-            return False
-        except argon2.exceptions.VerificationError:
-            return False
-        except argon2.exceptions.InvalidHashError:
-            return False
+        return PasswordManager.verify_password(self.password_hash, password)
 
     def to_dict(self):
         return {
             "id": self.id,
             "username": self.username,
             "display_name": self.display_name,
+            "nickname": self.nickname,
             "user_type": self.user_type,
             "default_org_id": self.default_org_id,
             "is_active": self.is_active,
@@ -206,3 +198,12 @@ class Reply(Base):
             "is_deleted_by_author": self.is_deleted_by_author,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempt"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String(80), nullable=False, index=True)
+    ip_address = Column(String(45), nullable=True)
+    attempted_at = Column(DateTime, default=datetime.utcnow)

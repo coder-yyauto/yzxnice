@@ -27,6 +27,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if not app.storage.user.get("user_id"):
             return RedirectResponse(f"/login?redirect_to={path}")
+        if not app.storage.user.get("session_nonce"):
+            app.storage.user.clear()
+            return RedirectResponse(f"/login?redirect_to={path}&reason=expired")
 
         login_time = app.storage.user.get("login_time", 0)
         if login_time and (time.time() - login_time > SESSION_MAX_AGE):

@@ -1,16 +1,17 @@
 import os
 from datetime import datetime
 
-from nicegui import app, ui
+from nicegui import ui
 
 from config import config
 from core.models import Comment, Like, Org, Post, Reply, User
 from core.org_utils import get_org_descendants, get_user_school, get_visible_org_ids
-from core.permissions import can_delete_post, can_manage_comment, can_manage_post
+from core.permissions import can_delete_post, can_manage_post
 from database import get_db
 
 
-def render_post_card(post_data: dict, current_user: dict, refresh_fn=None):
+def _resolve_post_permissions(post_data: dict, current_user: dict) -> tuple[bool, bool, bool]:
+    """Return (is_author, can_delete, can_hide) for a post."""
     is_author = post_data.get("user_id") == current_user["user_id"]
     can_del = is_author
     can_hide = False
@@ -23,6 +24,11 @@ def render_post_card(post_data: dict, current_user: dict, refresh_fn=None):
                 can_del = can_delete_post(u, p)
                 if u.user_type in ("teacher", "admin"):
                     can_hide = can_manage_post(u, p)
+    return is_author, can_del, can_hide
+
+
+def render_post_card(post_data: dict, current_user: dict, refresh_fn=None):
+    is_author, can_del, can_hide = _resolve_post_permissions(post_data, current_user)
 
     if post_data.get("is_hidden_by_admin") and not is_author and not can_hide:
         return
@@ -51,9 +57,7 @@ def render_post_card(post_data: dict, current_user: dict, refresh_fn=None):
                         ui.label(post_data.get("org_name", "")).classes("text-xs text-blue-400")
 
         with ui.column().classes("px-4 pb-2"):
-            ui.label(post_data.get("content", "")).classes(
-                "text-sm text-gray-800 leading-relaxed whitespace-pre-wrap"
-            )
+            ui.label(post_data.get("content", "")).classes("text-sm text-gray-800 leading-relaxed whitespace-pre-wrap")
 
         images = post_data.get("images", [])
         if images:
@@ -110,10 +114,7 @@ def _render_image_grid(images):
     if count == 1:
         grid_cols = "grid-cols-1"
         max_w = "max-w-[66%]"
-    elif count == 2:
-        grid_cols = "grid-cols-2"
-        max_w = ""
-    elif count == 4:
+    elif count == 2 or count == 4:
         grid_cols = "grid-cols-2"
         max_w = ""
     else:
@@ -123,30 +124,27 @@ def _render_image_grid(images):
     with ui.element("div").classes(f"grid {grid_cols} gap-1 px-4 mt-2 {max_w}"):
         for img in images:
             if img:
-                with ui.element("div").classes(
-                    "aspect-square overflow-hidden rounded bg-gray-100 cursor-pointer"
-                ).on("click", lambda img_name=img: _show_image_viewer(img_name)):
-                    ui.image(f"/static/uploads/{img}").classes(
-                        "w-full h-full object-cover"
-                    )
+                with (
+                    ui.element("div")
+                    .classes("aspect-square overflow-hidden rounded bg-gray-100 cursor-pointer")
+                    .on("click", lambda img_name=img: _show_image_viewer(img_name))
+                ):
+                    ui.image(f"/static/uploads/{img}").classes("w-full h-full object-cover")
 
 
 def _show_image_viewer(img_name):
-    with ui.dialog() as dialog:
-        with ui.element("div").classes(
-            "fixed inset-0 bg-black/95 flex items-center justify-center"
-        ).style("width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;"):
-            ui.button(
-                icon="close",
-                on_click=dialog.close,
-            ).props("flat round dense color=white size=lg").classes(
-                "absolute top-4 right-4"
-            ).style("z-index: 10001;")
-            ui.image(f"/static/uploads/{img_name}").classes(
-                "object-contain"
-            ).style(
-                "max-width: 90vw; max-height: 90vh; user-select: none; -webkit-user-drag: none;"
-            )
+    with (
+        ui.dialog() as dialog, ui.element("div")
+        .classes("fixed inset-0 bg-black/95 flex items-center justify-center")
+        .style("width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;")
+    ):
+        ui.button(
+            icon="close",
+            on_click=dialog.close,
+        ).props("flat round dense color=white size=lg").classes("absolute top-4 right-4").style("z-index: 10001;")
+        ui.image(f"/static/uploads/{img_name}").classes("object-contain").style(
+            "max-width: 90vw; max-height: 90vh; user-select: none; -webkit-user-drag: none;"
+        )
 
     dialog.props("full-width seamless")
     dialog.open()
@@ -160,6 +158,51 @@ def _toggle_comment_box(post_id):
         box = _comment_boxes[post_id]
         box.set_value(not box.value)
 
+
+def _should_show_comment(c: dict, current_user: dict, post_can_manage: bool) -> bool:
+    """Check if a comment should be visible to the current user."""
+    if c.get("is_deleted_by_author"):
+        return False
+    c_is_author = c.get("user_id") == current_user["user_id"]
+    return not (c.get("is_hidden_by_admin") and not c_is_author and not post_can_manage)
+
+
+def _render_comment_header(c: dict) -> tuple[str, str]:
+    """Render comment author name + badge. Returns (name_cls, is_teacher)."""
+    is_teacher = c.get("user_type") == "teacher"
+    name_cls = "text-blue-500 font-bold" if is_teacher else "text-blue-500"
+    if c.get("is_hidden_by_admin"):
+        with ui.element("span").classes(
+            "inline-flex items-center bg-red-100 text-red-600 text-xs "
+            "px-2 py-0.5 rounded-full font-bold mr-1"
+        ):
+            ui.icon("block", size="xs").classes("mr-1")
+            ui.label("被屏蔽")
+    return name_cls, is_teacher
+
+
+def _render_comment_actions(c: dict, current_user: dict, post_can_manage: bool, refresh_fn):
+    """Render action buttons for a single comment."""
+    c_is_author = c.get("user_id") == current_user["user_id"]
+    c_can_hide = post_can_manage and not c_is_author
+    if c_can_hide:
+        if c.get("is_hidden_by_admin"):
+            ui.button(icon="visibility", on_click=lambda cid=c["id"]: _unhide_comment(cid, refresh_fn)).props(
+                "flat dense size=sm color=green icon-only"
+            )
+        else:
+            ui.button(icon="visibility_off", on_click=lambda cid=c["id"]: _hide_comment(cid, refresh_fn)).props(
+                "flat dense size=sm color=orange icon-only"
+            )
+    if c_is_author or post_can_manage:
+        post_id = c.get("post_id", "")
+        ui.button(
+            icon="close",
+            on_click=lambda cid=c["id"], pid=post_id: _delete_comment_by_author(cid, pid, refresh_fn),
+        ).props("flat dense size=sm color=red icon-only")
+    ui.button(icon="reply", on_click=lambda cid=c["id"]: _toggle_reply_box(cid)).props(
+        "flat dense size=sm color=blue icon-only"
+    )
 
 def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False):
     comments = post_data.get("comments", [])
@@ -181,14 +224,15 @@ def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False)
 
                         if c.get("is_hidden_by_admin"):
                             with ui.element("span").classes(
-                                "inline-flex items-center bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold mr-1"
+                                "inline-flex items-center bg-red-100 text-red-600 text-xs "
+                                "px-2 py-0.5 rounded-full font-bold mr-1"
                             ):
                                 ui.icon("block", size="xs").classes("mr-1")
                                 ui.label("被屏蔽")
 
                         with ui.row().classes("gap-0"):
                             ui.label(c.get("author_name", "?")).classes(f"text-sm {name_cls}")
-                            ui.label(f'：{c["content"]}').classes("text-sm text-gray-600")
+                            ui.label(f"：{c['content']}").classes("text-sm text-gray-600")
 
                         with ui.row().classes("ml-auto gap-1 items-center"):
                             c_can_del = c_is_author or post_can_manage
@@ -236,42 +280,39 @@ def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False)
 
                                     if r.get("is_hidden_by_admin"):
                                         with ui.element("span").classes(
-                                            "inline-flex items-center bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold mr-1"
+                                            "inline-flex items-center bg-red-100 text-red-600 text-xs "
+                                "px-2 py-0.5 rounded-full font-bold mr-1"
                                         ):
                                             ui.icon("block", size="xs").classes("mr-1")
                                             ui.label("被屏蔽")
 
                                     with ui.row().classes("gap-0"):
                                         ui.label(r.get("author_name", "?")).classes(f"text-xs {r_name_cls}")
-                                        ui.label(f'：{r["content"]}').classes("text-xs text-gray-600")
+                                        ui.label(f"：{r['content']}").classes("text-xs text-gray-600")
 
                                     with ui.row().classes("ml-auto gap-1"):
                                         if r_is_author:
                                             ui.button(
                                                 icon="close",
-                                                on_click=lambda rid=r["id"]: _delete_reply_by_author(
-                                                    rid, refresh_fn
-                                                ),
+                                                on_click=lambda rid=r["id"]: _delete_reply_by_author(rid, refresh_fn),
                                             ).props("flat dense size=sm color=red icon-only")
 
                     reply_box = ui.expansion("回复...", value=False).classes("w-full mt-1").props("dense")
-                    with reply_box:
-                        with ui.row().classes("w-full items-center gap-2"):
-                            reply_inp = ui.input(placeholder="回复...").classes("flex-1").props("outlined dense")
-                            ui.button(
-                                "发送",
-                                on_click=lambda cid=c["id"], ri=reply_inp: _add_reply(cid, ri, refresh_fn),
-                            ).props("dense size=sm color=primary")
+                    with reply_box, ui.row().classes("w-full items-center gap-2"):
+                        reply_inp = ui.input(placeholder="回复...").classes("flex-1").props("outlined dense")
+                        ui.button(
+                            "发送",
+                            on_click=lambda cid=c["id"], ri=reply_inp: _add_reply(cid, ri, refresh_fn),
+                        ).props("dense size=sm color=primary")
                     _reply_boxes[c["id"]] = reply_box
 
         comment_box = ui.expansion("写评论...", value=False).classes("w-full mt-2").props("dense")
-        with comment_box:
-            with ui.row().classes("w-full items-center gap-2"):
-                inp = ui.input(placeholder="评论...").classes("flex-1").props("outlined dense")
-                ui.button(
-                    "发送",
-                    on_click=lambda pid=post_data["id"]: _add_comment(pid, inp, refresh_fn),
-                ).props("dense size=sm color=primary")
+        with comment_box, ui.row().classes("w-full items-center gap-2"):
+            inp = ui.input(placeholder="评论...").classes("flex-1").props("outlined dense")
+            ui.button(
+                "发送",
+                on_click=lambda pid=post_data["id"]: _add_comment(pid, inp, refresh_fn),
+            ).props("dense size=sm color=primary")
 
         _comment_boxes[post_data["id"]] = comment_box
 
@@ -340,6 +381,68 @@ def _delete_post(post_id, refresh_fn):
         refresh_fn()
 
 
+def _compute_user_org_ids(user_obj, db, visible_ids: list[str]) -> set[str]:
+    """Compute the set of org IDs that are visible to this user for visibility filtering."""
+    user_org_ids: set[str] = set()
+    if user_obj.user_type == "student":
+        user_org_ids.add(user_obj.default_org_id)
+        cur = db.query(Org).filter(Org.id == user_obj.default_org_id).first()
+        while cur and cur.parent_id:
+            user_org_ids.add(cur.parent_id)
+            cur = db.query(Org).filter(Org.id == cur.parent_id).first()
+    elif user_obj.user_type == "teacher":
+        school = get_user_school(db, user_obj)
+        if school:
+            user_org_ids.update(get_org_descendants(db, school.id))
+            user_org_ids.add(school.id)
+    elif user_obj.user_type == "admin":
+        user_org_ids = set(visible_ids)
+    return user_org_ids
+
+
+def _apply_visibility_filters(posts, user_id: str, user_org_ids: set[str]) -> list:
+    """Filter posts by visibility settings (private/partial/excluded)."""
+    filtered: list = []
+    for post in posts:
+        if post.visibility == "private" and post.user_id != user_id:
+            continue
+        if post.visibility == "partial" and post.user_id != user_id:
+            post_vis = set(post.visible_to_orgs.split(",")) if post.visible_to_orgs else set()
+            if not (user_org_ids & post_vis):
+                continue
+        if post.excluded_orgs and post.user_id != user_id:
+            excl = set(post.excluded_orgs.split(","))
+            if user_org_ids & excl:
+                continue
+        filtered.append(post)
+    return filtered
+
+
+def _build_post_dict(post, author, org, comments, like_count: int, is_liked: bool, comment_count: int) -> dict:
+    """Build the dict representation of a single post."""
+    return {
+        "id": post.id,
+        "user_id": post.user_id,
+        "user_type": author.user_type if author else "",
+        "content": post.content,
+        "images": post.images.split(",") if post.images else [],
+        "author_name": (author.nickname or author.display_name or author.username) if author else "未知",
+        "org_id": post.org_id,
+        "org_name": org.name if org else "",
+        "time_ago": _time_ago(post.created_at),
+        "created_at": post.created_at.isoformat() if post.created_at else None,
+        "like_count": like_count,
+        "is_liked": is_liked,
+        "comment_count": comment_count,
+        "comments": comments,
+        "is_hidden_by_admin": post.is_hidden_by_admin,
+        "visibility": post.visibility or "public",
+        "show_location": post.show_location if post.show_location is not None else True,
+        "visible_to_orgs": post.visible_to_orgs.split(",") if post.visible_to_orgs else [],
+        "excluded_orgs": post.excluded_orgs.split(",") if post.excluded_orgs else [],
+    }
+
+
 def load_posts(user: dict, filter_org_id=None) -> list[dict]:
     with get_db() as db:
         user_obj = db.query(User).filter(User.id == user["user_id"]).first()
@@ -348,7 +451,7 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
 
         visible_ids = get_visible_org_ids(db, user_obj)
 
-        query = db.query(Post).filter(Post.is_hidden == False, Post.org_id.in_(visible_ids))
+        query = db.query(Post).filter(~Post.is_hidden, Post.org_id.in_(visible_ids))
         if filter_org_id:
             if isinstance(filter_org_id, list):
                 valid = [oid for oid in filter_org_id if oid in visible_ids]
@@ -364,35 +467,10 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
         posts = query.order_by(Post.created_at.desc()).limit(100).all()
 
         # --- visibility: compute user_org_ids once ---
-        user_org_ids: set[str] = set()
-        if user_obj.user_type == "student":
-            user_org_ids.add(user_obj.default_org_id)
-            cur = db.query(Org).filter(Org.id == user_obj.default_org_id).first()
-            while cur and cur.parent_id:
-                user_org_ids.add(cur.parent_id)
-                cur = db.query(Org).filter(Org.id == cur.parent_id).first()
-        elif user_obj.user_type == "teacher":
-            school = get_user_school(db, user_obj)
-            if school:
-                user_org_ids.update(get_org_descendants(db, school.id))
-                user_org_ids.add(school.id)
-        elif user_obj.user_type == "admin":
-            user_org_ids = set(visible_ids)
+        user_org_ids = _compute_user_org_ids(user_obj, db, visible_ids)
 
         # --- filter posts by visibility ---
-        filtered: list[Post] = []
-        for post in posts:
-            if post.visibility == "private" and post.user_id != user["user_id"]:
-                continue
-            if post.visibility == "partial" and post.user_id != user["user_id"]:
-                post_vis = set(post.visible_to_orgs.split(",")) if post.visible_to_orgs else set()
-                if not (user_org_ids & post_vis):
-                    continue
-            if post.excluded_orgs and post.user_id != user["user_id"]:
-                excl = set(post.excluded_orgs.split(","))
-                if user_org_ids & excl:
-                    continue
-            filtered.append(post)
+        filtered = _apply_visibility_filters(posts, user["user_id"], user_org_ids)
 
         if not filtered:
             return []
@@ -402,11 +480,7 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
         all_user_ids: set[str] = {p.user_id for p in filtered}
 
         # like counts + is_liked
-        like_rows = (
-            db.query(Like.post_id, Like.user_id)
-            .filter(Like.post_id.in_(post_ids))
-            .all()
-        )
+        like_rows = db.query(Like.post_id, Like.user_id).filter(Like.post_id.in_(post_ids)).all()
         like_count_map: dict[str, int] = {}
         is_liked_set: set[str] = set()
         for post_id, uid in like_rows:
@@ -415,12 +489,7 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
                 is_liked_set.add(post_id)
 
         # comments
-        all_comments = (
-            db.query(Comment)
-            .filter(Comment.post_id.in_(post_ids))
-            .order_by(Comment.created_at.asc())
-            .all()
-        )
+        all_comments = db.query(Comment).filter(Comment.post_id.in_(post_ids)).order_by(Comment.created_at.asc()).all()
         comment_ids = [c.id for c in all_comments]
         for c in all_comments:
             all_user_ids.add(c.user_id)
@@ -429,10 +498,7 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
         all_replies: list[Reply] = []
         if comment_ids:
             all_replies = (
-                db.query(Reply)
-                .filter(Reply.comment_id.in_(comment_ids))
-                .order_by(Reply.created_at.asc())
-                .all()
+                db.query(Reply).filter(Reply.comment_id.in_(comment_ids)).order_by(Reply.created_at.asc()).all()
             )
             for r in all_replies:
                 all_user_ids.add(r.user_id)
@@ -444,9 +510,7 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
             users_map = {u.id: u for u in user_rows}
 
         # orgs
-        all_org_ids: set[str] = {p.org_id for p in filtered} | {
-            p.visible_org_id for p in filtered if p.visible_org_id
-        }
+        all_org_ids: set[str] = {p.org_id for p in filtered} | {p.visible_org_id for p in filtered if p.visible_org_id}
         orgs_map: dict[str, Org] = {}
         if all_org_ids:
             org_rows = db.query(Org).filter(Org.id.in_(list(all_org_ids))).all()
@@ -474,44 +538,50 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
                 replies_data: list[dict] = []
                 for r in replies_by_comment.get(c.id, []):
                     ra = users_map.get(r.user_id)
-                    replies_data.append({
-                        "id": r.id,
-                        "user_id": r.user_id,
-                        "user_type": ra.user_type if ra else "",
-                        "content": r.content,
-                        "author_name": (ra.display_name or ra.username) if ra else "未知",
-                        "is_hidden_by_admin": r.is_hidden_by_admin,
-                        "is_deleted_by_author": r.is_deleted_by_author,
-                    })
-                comments_data.append({
-                    "id": c.id,
-                    "user_id": c.user_id,
-                    "user_type": ca.user_type if ca else "",
-                    "content": c.content,
-                    "author_name": (ca.display_name or ca.username) if ca else "未知",
-                    "is_hidden_by_admin": c.is_hidden_by_admin,
-                    "is_deleted_by_author": c.is_deleted_by_author,
-                    "replies": replies_data,
-                })
+                    replies_data.append(
+                        {
+                            "id": r.id,
+                            "user_id": r.user_id,
+                            "user_type": ra.user_type if ra else "",
+                            "content": r.content,
+                            "author_name": (ra.nickname or ra.display_name or ra.username) if ra else "未知",
+                            "is_hidden_by_admin": r.is_hidden_by_admin,
+                            "is_deleted_by_author": r.is_deleted_by_author,
+                        }
+                    )
+                comments_data.append(
+                    {
+                        "id": c.id,
+                        "user_id": c.user_id,
+                        "user_type": ca.user_type if ca else "",
+                        "content": c.content,
+                        "author_name": (ca.nickname or ca.display_name or ca.username) if ca else "未知",
+                        "is_hidden_by_admin": c.is_hidden_by_admin,
+                        "is_deleted_by_author": c.is_deleted_by_author,
+                        "replies": replies_data,
+                    }
+                )
 
-            result.append({
-                "id": post.id,
-                "user_id": post.user_id,
-                "user_type": author.user_type if author else "",
-                "author_name": (author.display_name or author.username) if author else "未知",
-                "content": post.content,
-                "images": post.images.split(",") if post.images else [],
-                "org_id": post.org_id,
-                "org_name": org.name if org else "",
-                "like_count": like_count_map.get(post.id, 0),
-                "is_liked": post.id in is_liked_set,
-                "comment_count": len(comments_by_post.get(post.id, [])),
-                "comments": comments_data,
-                "is_hidden_by_admin": post.is_hidden_by_admin,
-                "visibility": post.visibility or "public",
-                "show_location": post.show_location if post.show_location is not None else True,
-                "time_ago": _time_ago(post.created_at),
-            })
+            result.append(
+                {
+                    "id": post.id,
+                    "user_id": post.user_id,
+                    "user_type": author.user_type if author else "",
+                    "author_name": (author.nickname or author.display_name or author.username) if author else "未知",
+                    "content": post.content,
+                    "images": post.images.split(",") if post.images else [],
+                    "org_id": post.org_id,
+                    "org_name": org.name if org else "",
+                    "like_count": like_count_map.get(post.id, 0),
+                    "is_liked": post.id in is_liked_set,
+                    "comment_count": len(comments_by_post.get(post.id, [])),
+                    "comments": comments_data,
+                    "is_hidden_by_admin": post.is_hidden_by_admin,
+                    "visibility": post.visibility or "public",
+                    "show_location": post.show_location if post.show_location is not None else True,
+                    "time_ago": _time_ago(post.created_at),
+                }
+            )
         return result
 
 

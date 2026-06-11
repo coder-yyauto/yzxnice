@@ -1,12 +1,13 @@
 """重置数据库并初始化超级管理员"""
-import sys
+
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from database import Base, engine, init_db, get_db
-from core.models import Org, User, UserRole
 from config import config
+from core.models import Org, User, UserRole
+from database import get_db, init_db
 
 db_path = "data/yzxnice.duckdb"
 if os.path.exists(db_path):

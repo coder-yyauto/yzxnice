@@ -2,7 +2,7 @@ import os
 import time
 import uuid
 
-from nicegui import APIRouter, app, ui
+from nicegui import APIRouter, ui
 
 from config import config
 from core.auth import AuthManager
@@ -10,12 +10,9 @@ from core.models import Org, Post, User
 from core.org_utils import (
     get_classes,
     get_grades,
-    get_manageable_org_ids,
-    get_org_descendants,
     get_school_root,
     get_schools,
     get_user_school,
-    get_visible_org_ids,
 )
 from database import get_db
 
@@ -28,8 +25,8 @@ async def home_page():
         ui.navigate.to("/login")
         return
 
-    from pyq.components import render_navbar
     from pyq.card import load_posts, render_post_card
+    from pyq.components import render_navbar
 
     render_navbar()
 
@@ -46,9 +43,10 @@ async def home_page():
             if school:
                 school_id = school.id
 
-    with ui.column().classes("w-full min-h-screen bg-[#ededed] items-center"):
-        with ui.column().classes("w-full max-w-[428px] px-4 pt-4 pb-8"):
-
+    with (
+        ui.column().classes("w-full min-h-screen bg-[#ededed] items-center"),
+        ui.column().classes("w-full max-w-[428px] px-4 pt-4 pb-8"),
+    ):
             with ui.row().classes("w-full items-center justify-between mb-3"):
                 ui.label("朋友圈").classes("text-lg font-bold text-gray-800")
                 with ui.row().classes("items-center gap-2"):
@@ -61,15 +59,19 @@ async def home_page():
                     _grades_data = []
                     for grade in get_grades(db, school_id):
                         classes = get_classes(db, grade.id)
-                        _grades_data.append({
-                            "id": grade.id,
-                            "name": grade.name,
-                            "classes": [{"id": c.id, "name": c.name} for c in classes],
-                        })
+                        _grades_data.append(
+                            {
+                                "id": grade.id,
+                                "name": grade.name,
+                                "classes": [{"id": c.id, "name": c.name} for c in classes],
+                            }
+                        )
 
-                filter_label = ui.button("查看范围: 全部", on_click=lambda: _open_filter_dialog()).props(
-                    "flat no-caps dense size=sm color=grey-7"
-                ).classes("text-xs")
+                filter_label = (
+                    ui.button("查看范围: 全部", on_click=lambda: _open_filter_dialog())
+                    .props("flat no-caps dense size=sm color=grey-7")
+                    .classes("text-xs")
+                )
 
                 def _open_filter_dialog():
                     with ui.dialog() as dialog, ui.card().classes("w-80 p-4"):
@@ -84,9 +86,9 @@ async def home_page():
                             for g in _grades_data:
                                 with ui.expansion(g["name"], group="filter_tree").classes("w-full"):
                                     ui.button(
-                                        f'{g["name"]}(全选)',
+                                        f"{g['name']}(全选)",
                                         on_click=lambda grade=g: _do_select(
-                                            [c["id"] for c in grade["classes"]], f'查看范围: {grade["name"]}', dialog
+                                            [c["id"] for c in grade["classes"]], f"查看范围: {grade['name']}", dialog
                                         ),
                                     ).props("flat no-caps dense align=left color=primary").classes(
                                         "w-full text-left text-sm"
@@ -95,11 +97,9 @@ async def home_page():
                                         ui.button(
                                             cls_["name"],
                                             on_click=lambda c=cls_: _do_select(
-                                                [c["id"]], f'查看范围: {c["name"]}', dialog
+                                                [c["id"]], f"查看范围: {c['name']}", dialog
                                             ),
-                                        ).props("flat no-caps dense align=left").classes(
-                                            "w-full text-left text-sm"
-                                        )
+                                        ).props("flat no-caps dense align=left").classes("w-full text-left text-sm")
                     dialog.open()
 
                 def _do_select(ids, label_text, dialog):
@@ -216,23 +216,26 @@ async def publish_page():
         ui.notify("发布成功", type="positive")
         ui.navigate.to("/home")
 
-    with ui.column().classes("w-full min-h-screen bg-[#ededed] items-center"):
-        with ui.column().classes("w-full max-w-[428px]"):
+    with (
+        ui.column().classes("w-full min-h-screen bg-[#ededed] items-center"),
+        ui.column().classes("w-full max-w-[428px]"),
+    ):
             with ui.row().classes(
                 "w-full h-12 bg-white border-b border-gray-200 items-center justify-between px-4 sticky top-0 z-50"
             ):
-                ui.button("取消", on_click=lambda: ui.navigate.to("/home")).props(
-                    "flat no-caps color=grey-7 text-base"
-                )
+                ui.button("取消", on_click=lambda: ui.navigate.to("/home")).props("flat no-caps color=grey-7 text-base")
                 ui.button("发表", on_click=handle_publish).props(
                     "flat no-caps color=green-600 text-green-600 text-base font-bold"
                 )
 
             with ui.column().classes("w-full bg-white"):
                 with ui.column().classes("w-full px-4 pt-4"):
-                    content_input = ui.textarea(placeholder="这一刻的想法...").classes("w-full").props(
-                        "borderless rows=4 dense"
-                    ).style("font-size: 15px; padding: 0;")
+                    content_input = (
+                        ui.textarea(placeholder="这一刻的想法...")
+                        .classes("w-full")
+                        .props("borderless rows=4 dense")
+                        .style("font-size: 15px; padding: 0;")
+                    )
 
                     preview_container = ui.row().classes("flex flex-wrap gap-2")
 
@@ -261,25 +264,37 @@ async def publish_page():
 
                 ui.element("div").classes("h-2 bg-[#ededed]")
 
-                with ui.row().classes(
-                    "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
-                ).on("click", lambda: _show_location_dialog(state, location_label)):
+                with (
+                    ui.row()
+                    .classes(
+                        "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
+                    )
+                    .on("click", lambda: _show_location_dialog(state, location_label))
+                ):
                     ui.label("所在位置").classes("text-sm text-gray-800")
                     with ui.row().classes("items-center gap-1"):
                         location_label = ui.label("当前位置").classes("text-sm text-gray-500")
                         ui.icon("chevron_right").classes("text-gray-400 text-lg")
 
-                with ui.row().classes(
-                    "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
-                ).on("click", lambda: _show_visibility_dialog(state, vis_label, org_tree)):
+                with (
+                    ui.row()
+                    .classes(
+                        "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
+                    )
+                    .on("click", lambda: _show_visibility_dialog(state, vis_label, org_tree))
+                ):
                     ui.label("谁可以看").classes("text-sm text-gray-800")
                     with ui.row().classes("items-center gap-1"):
                         vis_label = ui.label("公开").classes("text-sm text-gray-500")
                         ui.icon("chevron_right").classes("text-gray-400 text-lg")
 
-                with ui.row().classes(
-                    "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
-                ).on("click", lambda: _show_exclusion_dialog(state, excl_label, org_tree)):
+                with (
+                    ui.row()
+                    .classes(
+                        "w-full items-center justify-between px-4 py-3 bg-white border-b border-gray-100 cursor-pointer"
+                    )
+                    .on("click", lambda: _show_exclusion_dialog(state, excl_label, org_tree))
+                ):
                     ui.label("不给谁看").classes("text-sm text-gray-800")
                     with ui.row().classes("items-center gap-1"):
                         excl_label = ui.label("不限").classes("text-sm text-gray-500")
@@ -297,14 +312,13 @@ def _get_student_org_tree(db, user_obj):
     cls = db.query(Org).filter(Org.id == user_obj.default_org_id).first()
     if cls:
         tree[cls.id] = cls.name
-        from core.models import UserRole, User
-        class_admins = (
-            db.query(UserRole).filter(UserRole.scope_org_id == cls.id, UserRole.role == "class_admin").all()
-        )
+        from core.models import User, UserRole
+
+        class_admins = db.query(UserRole).filter(UserRole.scope_org_id == cls.id, UserRole.role == "class_admin").all()
         for r in class_admins:
             t = db.query(User).filter(User.id == r.user_id).first()
             if t:
-                tree[f"__user__{t.id}"] = f"  {t.display_name or t.username}（管理员）"
+                tree[f"__user__{t.id}"] = f"  {t.nickname or t.display_name or t.username}（管理员）"
     return tree
 
 

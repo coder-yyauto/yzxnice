@@ -3,9 +3,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from database import get_db, init_db
-from core.models import Org, User
 from config import config
+from core.models import Org, User
+from database import get_db, init_db
 
 
 def cleanup_data():
@@ -51,7 +51,7 @@ def cleanup_data():
         org_count = db.query(Org).count()
         user_count = db.query(User).count()
 
-        print(f"\n当前数据统计:")
+        print("\n当前数据统计:")
         print(f"  组织总数: {org_count}")
         print(f"  用户总数: {user_count}")
 

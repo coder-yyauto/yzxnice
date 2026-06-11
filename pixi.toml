@@ -1,7 +1,14 @@
 [workspace]
 name = "yzxnice"
 channels = ["conda-forge"]
-platforms = ["linux-64"]
+platforms = ["linux-64", "osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+dev = "python main.py"
+
+[environments]
+dev = ["dev"]
 
 [dependencies]
 python = "3.12.*"
@@ -12,14 +19,23 @@ duckdb-engine = "*"
 argon2-cffi = "*"
 pillow = "*"
 python-dotenv = "*"
-fastapi = "*"
 starlette = "*"
 requests = "*"
-uvicorn = "*"
 
 [pypi-dependencies]
-playwright = "*"
+pyjwt = "*"
 
-[tasks]
-start = "python main.py"
-prod = "uvicorn asgi:fastapi_app --uds /dev/shm/yzxnice.sock --workers 1 --access-log --proxy-headers --forwarded-allow-ips=*"
+[feature.dev.dependencies]
+ruff = "*"
+pyright = "*"
+
+[feature.dev.pypi-dependencies]
+pytest = "*"
+playwright = "*"
+httpx = "*"
+
+[feature.dev.tasks]
+test = "pytest tests/ -v"
+lint = "ruff check ."
+format = "ruff format ."
+playwright-install = "playwright install chromium"

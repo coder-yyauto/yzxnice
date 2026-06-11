@@ -1,0 +1,28 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "C", "N", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+line-ending = "lf"
+quote-style = "double"
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "admin", "pyq", "config", "database", "app_factory", "ui_login", "asgi"]
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = false
+
+[tool.pyright]
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
+reportOptionalMemberAccess = "warning"
+reportArgumentType = "warning"
+reportUnknownMemberType = "warning"
+exclude = ["tests", "__pycache__", ".ruff_cache"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -1,110 +1,113 @@
-from playwright.sync_api import sync_playwright
+import os
+import signal
 import subprocess
 import time
-import signal
+
 import requests
+from playwright.sync_api import sync_playwright
+
 
 def start_app():
     """启动应用"""
     try:
-        response = requests.get('http://localhost:8080', timeout=2)
+        requests.get("http://localhost:8080", timeout=2)
         print("应用已在运行")
         return None
-    except:
+    except requests.ConnectionError:
         print("应用未运行，正在启动...")
-        process = subprocess.Popen(['python', 'main.py'])
+        process = subprocess.Popen(["python", "main.py"], env={**os.environ, "NICEGUI_RELOAD": "false"})
         time.sleep(5)
         return process
+
 
 def login_and_navigate(page):
     """登录并导航到朋友圈"""
     print("正在访问应用...")
-    page.goto('http://localhost:8080')
-    page.wait_for_load_state('networkidle')
+    page.goto("http://localhost:8080")
+    page.wait_for_load_state("networkidle")
     time.sleep(2)
 
     print("点击登录...")
-    page.get_by_text('登录').click()
-    page.wait_for_load_state('networkidle')
+    page.get_by_text("登录").click()
+    page.wait_for_load_state("networkidle")
     time.sleep(2)
 
     print("填写登录信息...")
-    page.get_by_placeholder('用户名').fill('helaoshi')
+    page.get_by_placeholder("用户名").fill("helaoshi")
     time.sleep(1)
-    page.get_by_placeholder('密码').fill('123456')
+    page.get_by_placeholder("密码").fill("123456")
     time.sleep(1)
-    page.get_by_placeholder('请输入验证码').fill('1234')
+    page.get_by_placeholder("请输入验证码").fill("1234")
     time.sleep(1)
 
     print("提交登录...")
-    page.get_by_text('登录').click()
+    page.get_by_text("登录").click()
     time.sleep(3)
 
-    if '/home' in page.url:
+    if "/home" in page.url:
         print("✓ 登录成功")
-        page.wait_for_load_state('networkidle')
+        page.wait_for_load_state("networkidle")
         time.sleep(2)
         return True
     return False
+
 
 def test_specific_post_with_comment(page):
     """专门测试有评论的帖子"""
     print("\n=== 测试有评论的帖子功能 ===")
 
     # 寻找包含"学生发的帖子"的帖子
-    student_post_found = False
 
     print("寻找学生发的帖子...")
     page_content = page.content()
 
-    if '学生发的帖子' in page_content:
+    if "学生发的帖子" in page_content:
         print("✓ 找到学生发的帖子")
-        student_post_found = True
     else:
         print("✗ 未找到学生发的帖子")
         return
 
     # 检查该帖子区域的评论按钮
     print("检查该帖子的评论按钮...")
-    comment_buttons = page.get_by_text('评论')
+    comment_buttons = page.get_by_text("评论")
 
     if comment_buttons.count() >= 1:
         print(f"找到 {comment_buttons.count()} 个评论按钮")
 
         # 尝试点击不同的评论按钮
         for i in range(min(5, comment_buttons.count())):
-            print(f"\n尝试第 {i+1} 个评论按钮...")
+            print(f"\n尝试第 {i + 1} 个评论按钮...")
             comment_buttons.nth(i).click()
             time.sleep(3)
 
-            print(f"截图：点击第 {i+1} 个评论按钮后")
-            page.screenshot(path=f'/tmp/test_comment_click_{i+1}.png')
+            print(f"截图：点击第 {i + 1} 个评论按钮后")
+            page.screenshot(path=f"/tmp/test_comment_click_{i + 1}.png")
 
             comment_area_content = page.content()
 
             # 检查评论内容
-            if '还不错' in comment_area_content:
+            if "还不错" in comment_area_content:
                 print("✓ 展开了包含评论的区域")
 
                 # 详细检查功能按钮
                 print("\n检查功能按钮:")
 
                 # 检查回复按钮
-                reply_buttons = page.get_by_text('回复')
+                reply_buttons = page.get_by_text("回复")
                 if reply_buttons.count() > 0:
                     print(f"  ✓ 回复按钮: {reply_buttons.count()} 个")
                 else:
                     print("  ✗ 回复按钮: 0 个")
 
                 # 检查删除按钮
-                delete_buttons = page.get_by_text('删除')
+                delete_buttons = page.get_by_text("删除")
                 if delete_buttons.count() > 0:
                     print(f"  ✓ 删除按钮: {delete_buttons.count()} 个")
                 else:
                     print("  ✗ 删除按钮: 0 个")
 
                 # 检查屏蔽相关按钮
-                hide_texts = ['屏蔽', 'visibility_off', 'visibility']
+                hide_texts = ["屏蔽", "visibility_off", "visibility"]
                 hide_found = False
                 for text in hide_texts:
                     elements = page.get_by_text(text)
@@ -116,7 +119,7 @@ def test_specific_post_with_comment(page):
                     print("  ✗ 屏蔽功能: 未找到")
 
                 # 检查被屏蔽提示
-                if '被屏蔽' in comment_area_content:
+                if "被屏蔽" in comment_area_content:
                     print("  ✓ 被屏蔽提示: 存在")
                 else:
                     print("  ✗ 被屏蔽提示: 不存在")
@@ -133,40 +136,41 @@ def test_specific_post_with_comment(page):
                 page.go_back()
                 time.sleep(2)
 
+
 def test_main_features(page):
     """测试主要功能"""
     print("\n=== 测试主要功能 ===")
 
     # 1. 筛选班级
     print("\n1. 测试筛选班级功能...")
-    filter_select = page.get_by_text('筛选班级')
+    filter_select = page.get_by_text("筛选班级")
     if filter_select.count() > 0:
         print("✓ 找到筛选班级")
         # 尝试展开
         try:
             filter_select.click()
             time.sleep(2)
-            page.screenshot(path='/tmp/test_filter_expanded.png')
+            page.screenshot(path="/tmp/test_filter_expanded.png")
 
             # 检查是否有选项
             filter_content = page.content()
-            if '全部' in filter_content:
+            if "全部" in filter_content:
                 print("✓ 筛选班级可以展开")
             else:
                 print("✗ 筛选班级无法展开或没有选项")
-        except:
+        except Exception:
             print("✗ 筛选班级点击失败")
     else:
         print("✗ 未找到筛选班级功能")
 
     # 2. 发布功能
     print("\n2. 测试发布功能...")
-    publish_btn = page.get_by_text('发布')
+    publish_btn = page.get_by_text("发布")
     if publish_btn.is_visible():
         print("✓ 找到发布按钮")
         publish_btn.click()
         time.sleep(2)
-        page.screenshot(path='/tmp/test_publish_page.png')
+        page.screenshot(path="/tmp/test_publish_page.png")
 
         # 检查发布页面元素
         publish_content = page.content()
@@ -181,10 +185,11 @@ def test_main_features(page):
 
     # 3. 点赞功能
     print("\n3. 测试点赞功能...")
-    like_buttons = page.get_by_text('点赞')
-    star_buttons = page.get_by_text('star_border')
+    like_buttons = page.get_by_text("点赞")
+    star_buttons = page.get_by_text("star_border")
     print(f"找到 {like_buttons.count()} 个'点赞'按钮")
     print(f"找到 {star_buttons.count()} 个'star_border'按钮")
+
 
 def test_app():
     app_process = start_app()
@@ -200,7 +205,7 @@ def test_app():
                 return
 
             print("截图：完整朋友圈页面")
-            page.screenshot(path='/tmp/test_pyq_complete.png', full_page=True)
+            page.screenshot(path="/tmp/test_pyq_complete.png", full_page=True)
 
             # 测试主要功能
             test_main_features(page)
@@ -209,7 +214,7 @@ def test_app():
             test_specific_post_with_comment(page)
 
             print("\n最终截图...")
-            page.screenshot(path='/tmp/test_final_state.png', full_page=True)
+            page.screenshot(path="/tmp/test_final_state.png", full_page=True)
 
             browser.close()
 
@@ -221,5 +226,6 @@ def test_app():
 
     print("\n测试完成！所有截图已保存到 /tmp/test_*.png")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     test_app()

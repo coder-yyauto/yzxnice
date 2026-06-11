@@ -46,6 +46,7 @@ def init_db():
 
     Base.metadata.create_all(bind=engine, checkfirst=True)
     _migrate_post_visibility()
+    _migrate_user_nickname()
     print("数据库初始化完成")
 
 
@@ -70,3 +71,23 @@ def _migrate_post_visibility():
                 if "already exists" not in msg.lower():
                     logger.warning("Migration column %s failed: %s", col_name, e)
     logger.info("post表字段迁移完成")
+
+
+def _migrate_user_nickname():
+    from sqlalchemy import text
+
+    new_cols = [
+        ("nickname", "VARCHAR(100)", "NULL"),
+    ]
+    with engine.connect() as conn:
+        for col_name, col_type, default in new_cols:
+            try:
+                conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col_name} {col_type} DEFAULT {default}'))
+                conn.commit()
+                logger.info("Migration: added column user.%s", col_name)
+            except Exception as e:
+                conn.rollback()
+                msg = str(e)
+                if "already exists" not in msg.lower():
+                    logger.warning("Migration column user.%s failed: %s", col_name, e)
+    logger.info("user表字段迁移完成")

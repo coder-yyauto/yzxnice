@@ -1,7 +1,7 @@
 import logging
-import os
 
 from sqlalchemy import text
+
 from database import engine
 
 logger = logging.getLogger(__name__)
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def migrate():
     """Add new columns and tables for admin blocking and comment replies"""
-    
+
     migrations = [
         "ALTER TABLE post ADD COLUMN is_hidden_by_admin BOOLEAN DEFAULT FALSE",
         "ALTER TABLE comment ADD COLUMN is_hidden_by_admin BOOLEAN DEFAULT FALSE",
@@ -28,7 +28,7 @@ def migrate():
         )
         """,
     ]
-    
+
     with engine.connect() as conn:
         for migration in migrations:
             try:
@@ -42,7 +42,7 @@ def migrate():
                 else:
                     print(f"执行失败: {e}")
                     logger.error("迁移失败: %s", migration[:80], exc_info=True)
-    
+
     print("数据库迁移完成")
 
 

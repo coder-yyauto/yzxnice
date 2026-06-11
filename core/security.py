@@ -4,22 +4,20 @@ import base64
 import io
 import os
 import random
+import secrets
 import string
 import time
 import uuid
+from datetime import datetime, timedelta
 
 import argon2
 from PIL import Image, ImageDraw, ImageFont
-
-from config import config
 
 TEST_MODE: bool = os.getenv("TEST_MODE", "false").lower() == "true"
 
 
 class PasswordManager:
-    _hasher: argon2.PasswordHasher = argon2.PasswordHasher(
-        time_cost=2, memory_cost=65536, parallelism=2, hash_len=32
-    )
+    _hasher: argon2.PasswordHasher = argon2.PasswordHasher(time_cost=2, memory_cost=65536, parallelism=2, hash_len=32)
 
     @classmethod
     def hash_password(cls, password: str) -> str:
@@ -37,47 +35,97 @@ class PasswordManager:
         except argon2.exceptions.InvalidHashError:
             return False
 
+    @staticmethod
+    def generate_random_password(length: int = 8) -> str:
+        chars = string.ascii_letters + string.digits
+        return "".join(secrets.choice(chars) for _ in range(length))
+
 
 class LoginAttemptManager:
-    _attempts: dict[str, list[float]] = {}
     MAX_ATTEMPTS: int = 5
+    MAX_IP_ATTEMPTS: int = 30
     LOCK_SECONDS: int = 15 * 60
 
     @classmethod
-    def is_locked(cls, username: str) -> bool:
-        cls._cleanup(username)
-        attempts: list[float] = cls._attempts.get(username, [])
-        return len(attempts) >= cls.MAX_ATTEMPTS
+    def _count_recent(cls, username: str) -> int:
+        from core.models import LoginAttempt
+        from database import get_db
+
+        cutoff = datetime.utcnow() - timedelta(seconds=cls.LOCK_SECONDS)
+        with get_db() as db:
+            return (
+                db.query(LoginAttempt)
+                .filter(
+                    LoginAttempt.username == username,
+                    LoginAttempt.attempted_at >= cutoff,
+                )
+                .count()
+            )
 
     @classmethod
-    def record_failure(cls, username: str) -> int:
-        cls._cleanup(username)
-        if username not in cls._attempts:
-            cls._attempts[username] = []
-        cls._attempts[username].append(time.time())
-        remaining: int = cls.MAX_ATTEMPTS - len(cls._attempts[username])
+    def is_locked(cls, username: str) -> bool:
+        return cls._count_recent(username) >= cls.MAX_ATTEMPTS
+
+    @classmethod
+    def record_failure(cls, username: str, ip_address: str = "") -> int:
+        from core.models import LoginAttempt
+        from database import get_db
+
+        with get_db() as db:
+            attempt = LoginAttempt(username=username, ip_address=ip_address or None)
+            db.add(attempt)
+            db.commit()
+        recent = cls._count_recent(username)
+        remaining = cls.MAX_ATTEMPTS - recent
         return max(remaining, 0)
 
     @classmethod
+    def is_ip_blocked(cls, ip_address: str) -> bool:
+        if not ip_address:
+            return False
+        from core.models import LoginAttempt
+        from database import get_db
+
+        cutoff = datetime.utcnow() - timedelta(seconds=cls.LOCK_SECONDS)
+        with get_db() as db:
+            count = (
+                db.query(LoginAttempt)
+                .filter(
+                    LoginAttempt.ip_address == ip_address,
+                    LoginAttempt.attempted_at >= cutoff,
+                )
+                .count()
+            )
+        return count >= cls.MAX_IP_ATTEMPTS
+
+    @classmethod
     def reset(cls, username: str) -> None:
-        cls._attempts.pop(username, None)
+        from core.models import LoginAttempt
+        from database import get_db
+
+        with get_db() as db:
+            db.query(LoginAttempt).filter(LoginAttempt.username == username).delete()
+            db.commit()
 
     @classmethod
     def get_lock_remaining(cls, username: str) -> int:
-        cls._cleanup(username)
-        attempts: list[float] = cls._attempts.get(username, [])
-        if len(attempts) < cls.MAX_ATTEMPTS:
-            return 0
-        elapsed: float = time.time() - attempts[0]
-        return max(int(cls.LOCK_SECONDS - elapsed), 0)
+        from core.models import LoginAttempt
+        from database import get_db
 
-    @classmethod
-    def _cleanup(cls, username: str) -> None:
-        now: float = time.time()
-        attempts: list[float] = cls._attempts.get(username, [])
-        cls._attempts[username] = [t for t in attempts if now - t < cls.LOCK_SECONDS]
-        if not cls._attempts[username]:
-            cls._attempts.pop(username, None)
+        with get_db() as db:
+            oldest = (
+                db.query(LoginAttempt)
+                .filter(LoginAttempt.username == username)
+                .order_by(LoginAttempt.attempted_at.asc())
+                .first()
+            )
+        if oldest is None:
+            return 0
+        recent_count = cls._count_recent(username)
+        if recent_count < cls.MAX_ATTEMPTS:
+            return 0
+        elapsed = (datetime.utcnow() - oldest.attempted_at).total_seconds()
+        return max(int(cls.LOCK_SECONDS - elapsed), 0)
 
 
 class CaptchaManager:
@@ -86,11 +134,7 @@ class CaptchaManager:
     @classmethod
     def generate(cls) -> tuple[str, str, str]:
         captcha_id: str = str(uuid.uuid4())
-        captcha_text: str
-        if TEST_MODE:
-            captcha_text = "1234"
-        else:
-            captcha_text = "".join(random.choices(string.digits, k=4))
+        captcha_text: str = "1234" if TEST_MODE else "".join(secrets.choice(string.digits) for _ in range(4))
         image: Image.Image = cls._generate_image(captcha_text)
         buffer: io.BytesIO = io.BytesIO()
         image.save(buffer, format="PNG")

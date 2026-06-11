@@ -4,18 +4,16 @@
 
 ## 项目环境
 
-- **框架**：NiceGUI 3.x（基于 FastAPI 的 Web UI 框架）
-- **Python**：3.12.*
+- **框架**：NiceGUI（基于 FastAPI 的 Web UI 框架）
+- **Python**：3.12
 - **包管理器**：Pixi（替代 conda/mamba/pip）
-- **数据库**：DuckDB
-- **密码加密**：bcrypt
-- **认证方式**：NiceGUI app.storage.user（服务端 Session）
 
 ### 核心命令
 
 ```bash
 pixi install              # 安装环境
-pixi run python main.py   # 启动 NiceGUI（端口 8080）
+pixi run python main.py   # 启动 NiceGUI
+pixi run pytest           # 运行测试
 pixi add <pkg>            # 添加 conda 包
 pixi add --pypi <pkg>     # 添加 PyPI 包
 pixi shell                # 进入交互环境
@@ -24,15 +22,14 @@ pixi shell                # 进入交互环境
 ### 环境规则
 
 1. **所有 Python 命令必须以 `pixi run` 为前缀**
-2. **禁止使用** `conda activate` / `source activate` / `pip install`（改用 `pixi add`）
+2. **禁止使用** `conda activate` / `source activate` / `pip install`（pip 在 pixi 管理的 env 里也未安装；用 `pixi add`）
+   - conda 包：`pixi add <pkg>`（写入 `[dependencies]`）
+   - PyPI 包：`pixi add --pypi <pkg>`（写入 `[pypi-dependencies]`，**不要**先 `pixi run pip install`）
+   - 仅 dev 环境用：`pixi add --pypi <pkg> --feature dev`
+   - 装完必须 `pixi install` 让 lockfile 同步；**不要**直接编辑 `pixi.toml` 后跳过 install
 3. 安装新依赖前先检查 `pixi.toml` 中是否已声明
 4. 配置文件：`pixi.toml`（依赖声明）、`pixi.lock`（锁文件）
 5. NiceGUI 启动：`pixi run python main.py`
-
-### 截图目录
-
-- 最新截图放在项目根目录的 `xnip/` 下
-- 查看截图用于了解当前 UI 状态或验证改动效果
 
 **权衡说明：** 本指南在谨慎与速度之间偏向于谨慎。对于琐碎任务，请自行判断。
 

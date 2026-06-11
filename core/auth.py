@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import time
 from typing import Any
 
@@ -9,12 +10,11 @@ from core.models import Org, User
 
 
 class AuthManager:
-
     @staticmethod
     def login(username: str, password: str) -> dict[str, Any]:
-        from database import get_db
         from core.org_utils import get_user_school
         from core.permissions import has_any_admin_role
+        from database import get_db
 
         with get_db() as db:
             user: User | None = db.query(User).filter(User.username == username).first()
@@ -38,28 +38,33 @@ class AuthManager:
             org_obj: Org | None = db.query(Org).filter(Org.id == user.default_org_id).first()
             user_info["org_name"] = org_obj.name if org_obj else ""
 
-            from core.permissions import has_admin_page_access
+            from core.permissions import has_admin_page_access, has_any_admin_role
 
             user_info["is_admin"] = user.user_type == "admin" or has_any_admin_role(db, user)
             user_info["has_admin_page"] = user.user_type == "admin" or has_admin_page_access(db, user)
+            user_info["has_seat_access"] = user.user_type == "admin" or has_any_admin_role(db, user)
 
             return user_info
 
     @staticmethod
     def set_session(user_info: dict[str, Any]) -> None:
+        app.storage.user.clear()
         app.storage.user.update(
             {
                 "user_id": user_info["id"],
                 "username": user_info["username"],
                 "display_name": user_info.get("display_name", ""),
+                "nickname": user_info.get("nickname", ""),
                 "user_type": user_info.get("user_type", "student"),
                 "is_admin": user_info.get("is_admin", False),
                 "has_admin_page": user_info.get("has_admin_page", False),
+                "has_seat_access": user_info.get("has_seat_access", False),
                 "school_id": user_info.get("school_id"),
                 "school_name": user_info.get("school_name", ""),
                 "school_code": user_info.get("school_code", ""),
                 "default_org_id": user_info.get("default_org_id"),
                 "org_name": user_info.get("org_name", ""),
+                "session_nonce": secrets.token_hex(32),
                 "login_time": time.time(),
             }
         )
@@ -77,9 +82,11 @@ class AuthManager:
             "user_id": user_id,
             "username": app.storage.user.get("username", ""),
             "display_name": app.storage.user.get("display_name", ""),
+            "nickname": app.storage.user.get("nickname", ""),
             "user_type": app.storage.user.get("user_type", "student"),
             "is_admin": app.storage.user.get("is_admin", False),
             "has_admin_page": app.storage.user.get("has_admin_page", False),
+            "has_seat_access": app.storage.user.get("has_seat_access", False),
             "school_id": app.storage.user.get("school_id"),
             "school_name": app.storage.user.get("school_name", ""),
             "school_code": app.storage.user.get("school_code", ""),

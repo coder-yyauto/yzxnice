@@ -71,20 +71,18 @@ def has_any_admin_role(db: Session, user: User) -> bool:
 def has_admin_page_access(db: Session, user: User) -> bool:
     if user.user_type == "admin":
         return True
-    school_admin: UserRole | None = db.query(UserRole).filter(
-        UserRole.user_id == user.id,
-        UserRole.role == "school_admin"
-    ).first()
+    school_admin: UserRole | None = (
+        db.query(UserRole).filter(UserRole.user_id == user.id, UserRole.role == "school_admin").first()
+    )
     return school_admin is not None
 
 
 def get_admin_school_ids(db: Session, user: User) -> set[str]:
     if user.user_type == "admin":
-        return {s.id for s in db.query(Org).filter(Org.org_type == "school", Org.is_active == True).all()}
-    roles: list[UserRole] = db.query(UserRole).filter(
-        UserRole.user_id == user.id,
-        UserRole.role == "school_admin"
-    ).all()
+        return {s.id for s in db.query(Org).filter(Org.org_type == "school", Org.is_active).all()}
+    roles: list[UserRole] = (
+        db.query(UserRole).filter(UserRole.user_id == user.id, UserRole.role == "school_admin").all()
+    )
     return {r.scope_org_id for r in roles}
 
 
