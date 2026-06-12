@@ -147,14 +147,24 @@ class CaptchaManager:
         cls._cleanup_expired()
         return captcha_id, captcha_text, image_data_url
 
+    # 万用验证码：仅当 TEST_MODE=true 时生效（dev/CI 用）
+    # 任何业务/生产部署必须设 TEST_MODE=false，本分支不会被走到
+    DEV_UNIVERSAL_CAPTCHA: str = "9527"
+
     @classmethod
     def verify(cls, captcha_id: str, user_input: str) -> bool:
         if TEST_MODE:
-            return True
+            if user_input.strip() == cls.DEV_UNIVERSAL_CAPTCHA:
+                return True
+            # 仍然允许 generate 时使用的固定值，方便自动化
+            if captcha_id in cls._captchas:
+                stored_text, created_time = cls._captchas[captcha_id]
+                if time.time() - created_time <= 300 and stored_text == user_input.strip():
+                    del cls._captchas[captcha_id]
+                    return True
+            return False
         if captcha_id not in cls._captchas:
             return False
-        stored_text: str
-        created_time: float
         stored_text, created_time = cls._captchas[captcha_id]
         if time.time() - created_time > 300:
             del cls._captchas[captcha_id]
