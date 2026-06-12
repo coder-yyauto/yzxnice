@@ -30,12 +30,12 @@ pixi shell                # 进入交互环境
 3. 安装新依赖前先检查 `pixi.toml` 中是否已声明
 4. 配置文件：`pixi.toml`（依赖声明）、`pixi.lock`（锁文件）
 5. NiceGUI 启动：`pixi run python main.py`
-- **Git 提交约定**：`pre-commit` hook 已注册（`.git/hooks/pre-commit`）。ruff 历史债已清（24 → 0，提交 `520d6e9`），mypy 307 仍存在，所以 `git commit` 仍会被 mypy 拦下。约定：
-  - **开发中临时提交用 `git commit --no-verify` 绕过**（先确保 `pixi run ruff check .` 和 `pixi run ruff format .` 自己看过）
-  - **推送前用 `git commit --no-verify` 或 `SKIP=ruff,mypy git commit`**
-  - 长期目标：补齐类型注解、解掉 mypy 307 历史告警（独立工单），届时去掉 `--no-verify`
-  - 手动跑 lint：`pixi run lint`、`pixi run --environment dev ruff check .`、`pixi run format`
+- **Git 提交约定**：`pre-commit` hook 已注册（`.git/hooks/pre-commit`）。ruff 24 错 + mypy 302 错已全部清零（提交 `520d6e9` + `78426d7`），`git commit` 不再需要 `--no-verify`：
+  - 标准流程：`pixi run format` → `pixi run lint` → `git add -A` → `git commit -m "..."` → `git push origin master:main`
+  - Hook 钩子：ruff（lint + format）+ mypy strict（exclude `tests/`）
+  - 手动跑：`pre-commit run --all-files`（验证 3 钩子全过）
   - 装新环境后第一次提交前要 `pre-commit install`
+  - 保留的 `# type: ignore[misc]` 共 ~14 处：8 处 SQLAlchemy 2.0 `class X(Base):` 缺 stub、6 处 `@router.page` 装饰器 untyped（nicegui 缺 stub）
 
 **权衡说明：** 本指南在谨慎与速度之间偏向于谨慎。对于琐碎任务，请自行判断。
 
