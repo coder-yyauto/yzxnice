@@ -37,6 +37,23 @@ pixi shell                # 进入交互环境
   - 装新环境后第一次提交前要 `pre-commit install`
   - 保留的 `# type: ignore[misc]` 共 ~14 处：8 处 SQLAlchemy 2.0 `class X(Base):` 缺 stub、6 处 `@router.page` 装饰器 untyped（nicegui 缺 stub）
 
+### 生产端 pull 范围与边界（重要，提交 `dd518b9` 之后生效）
+
+`git push` 出去的**只应是**：
+- 代码（`admin/`、`pyq/`、`core/`、`tests/`、顶层 `*.py` 模块）
+- 部署/启动脚本与说明（`deploy/`、`init.sh`、`svc.sh`、`environment.yml`、`yzxnice.md`）
+- 依赖与构建（`pixi.toml`、`pixi.lock`、`pyproject.toml`、`.pre-commit-config.yaml`、`.gitignore`、`.env.example`、`CLAUDE.md`）
+
+`git push` **不应**涉及（已被 `.gitignore` 永远忽略，或本就不该跟踪）：
+- 本机 Python 环境：`.pixi/`、`__pycache__/`、`*.egg-info/`
+- 现役数据库：`run/`、`data/*.duckdb`、`data/*.duckdb.wal`
+- 用户上传与运行时状态：`static/uploads/`、`.nicegui/storage-user-*.json`、`app.log`
+- 本机配置与密钥：`.env`、`crush.json`、`.idea/`、`.vscode/`、`.DS_Store`
+- 一次性调试/扫描产物：`duckdb_locked.md`、`sast_scan_reports/`
+
+**关键原则**：生产端 pull 之后，**业务代码 + 部署脚本 + 依赖清单**到位即可，**数据库/上传/会话/密钥都是生产自己的事**。生产端的 `.env` 须独立维护（推荐用 secrets manager 注入环境变量），绝不要从开发者机器 push 真实 `.env`。
+**Schema 变更走迁移**：改动 `core/models.py` 的字段/索引/关系时，**同时**编辑 `database.py` 的 `_migrate_*` 函数（参考已有的 `_migrate_post_visibility` / `_migrate_user_nickname` 模板），并跑 `migrate_db.py` 验证现役数据库不丢数据。**不要**让生产端只 `git pull` 就启动——必须配合 `pixi run python migrate_db.py`。
+
 **权衡说明：** 本指南在谨慎与速度之间偏向于谨慎。对于琐碎任务，请自行判断。
 
 ## 1. 编码前思考
