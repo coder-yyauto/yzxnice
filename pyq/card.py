@@ -205,6 +205,110 @@ def _render_comment_actions(c: dict, current_user: dict, post_can_manage: bool, 
     )
 
 
+def _render_comment_action_row(c, c_is_author, post_id, refresh_fn, post_can_manage):
+    """Render the right-aligned action buttons (hide/unhide/delete/reply) for a comment."""
+    c_can_del = c_is_author or post_can_manage
+    c_can_hide = post_can_manage and not c_is_author
+
+    with ui.row().classes("ml-auto gap-1 items-center"):
+        if c_can_hide and not c.get("is_hidden_by_admin"):
+            ui.button(
+                icon="visibility_off",
+                on_click=lambda cid=c["id"]: _hide_comment(cid, refresh_fn),
+            ).props("flat dense size=sm color=orange icon-only")
+
+        if c_can_hide and c.get("is_hidden_by_admin"):
+            ui.button(
+                icon="visibility",
+                on_click=lambda cid=c["id"]: _unhide_comment(cid, refresh_fn),
+            ).props("flat dense size=sm color=green icon-only")
+
+        if c_can_del:
+            ui.button(
+                icon="close",
+                on_click=lambda cid=c["id"], pid=post_id: _delete_comment_by_author(cid, pid, refresh_fn),
+            ).props("flat dense size=sm color=red icon-only")
+
+        ui.button(
+            icon="reply",
+            on_click=lambda cid=c["id"]: _toggle_reply_box(cid),
+        ).props("flat dense size=sm color=blue icon-only")
+
+
+def _render_replies(replies, current_user, refresh_fn, post_can_manage):
+    """Render the list of replies under a comment, skipping hidden/deleted ones."""
+    if not replies:
+        return
+    with ui.column().classes("ml-4 mt-2"):
+        for r in replies:
+            if r.get("is_deleted_by_author"):
+                continue
+            r_is_author = r.get("user_id") == current_user["user_id"]
+            if r.get("is_hidden_by_admin") and not r_is_author and not post_can_manage:
+                continue
+
+            with ui.row().classes("w-full text-xs leading-relaxed"):
+                is_tr = r.get("user_type") == "teacher"
+                r_name_cls = "text-blue-500 font-bold" if is_tr else "text-blue-500"
+
+                if r.get("is_hidden_by_admin"):
+                    with ui.element("span").classes(
+                        "inline-flex items-center bg-red-100 text-red-600 text-xs "
+                        "px-2 py-0.5 rounded-full font-bold mr-1"
+                    ):
+                        ui.icon("block", size="xs").classes("mr-1")
+                        ui.label("被屏蔽")
+
+                with ui.row().classes("gap-0"):
+                    ui.label(r.get("author_name", "?")).classes(f"text-xs {r_name_cls}")
+                    ui.label(f"：{r['content']}").classes("text-xs text-gray-600")
+
+                with ui.row().classes("ml-auto gap-1"):
+                    if r_is_author:
+                        ui.button(
+                            icon="close",
+                            on_click=lambda rid=r["id"]: _delete_reply_by_author(rid, refresh_fn),
+                        ).props("flat dense size=sm color=red icon-only")
+
+
+def _render_single_comment(c, current_user, refresh_fn, post_can_manage, post_id):
+    """Render one comment row, its replies, and its reply box. Skips hidden/deleted."""
+    if c.get("is_deleted_by_author"):
+        return False
+    c_is_author = c.get("user_id") == current_user["user_id"]
+    if c.get("is_hidden_by_admin") and not c_is_author and not post_can_manage:
+        return False
+
+    with ui.row().classes("w-full text-sm leading-relaxed"):
+        is_t = c.get("user_type") == "teacher"
+        name_cls = "text-blue-500 font-bold" if is_t else "text-blue-500"
+
+        if c.get("is_hidden_by_admin"):
+            with ui.element("span").classes(
+                "inline-flex items-center bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold mr-1"
+            ):
+                ui.icon("block", size="xs").classes("mr-1")
+                ui.label("被屏蔽")
+
+        with ui.row().classes("gap-0"):
+            ui.label(c.get("author_name", "?")).classes(f"text-sm {name_cls}")
+            ui.label(f"：{c['content']}").classes("text-sm text-gray-600")
+
+        _render_comment_action_row(c, c_is_author, post_id, refresh_fn, post_can_manage)
+
+    _render_replies(c.get("replies", []), current_user, refresh_fn, post_can_manage)
+
+    reply_box = ui.expansion("回复...", value=False).classes("w-full mt-1").props("dense")
+    with reply_box, ui.row().classes("w-full items-center gap-2"):
+        reply_inp = ui.input(placeholder="回复...").classes("flex-1").props("outlined dense")
+        ui.button(
+            "发送",
+            on_click=lambda cid=c["id"], ri=reply_inp: _add_reply(cid, ri, refresh_fn),
+        ).props("dense size=sm color=primary")
+    _reply_boxes[c["id"]] = reply_box
+    return True
+
+
 def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False):
     comments = post_data.get("comments", [])
 
@@ -212,100 +316,7 @@ def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False)
         if comments:
             with ui.element("div").classes("bg-[#f7f7f7] rounded mt-3 px-3 py-2"):
                 for c in comments:
-                    if c.get("is_deleted_by_author"):
-                        continue
-
-                    c_is_author = c.get("user_id") == current_user["user_id"]
-                    if c.get("is_hidden_by_admin") and not c_is_author and not post_can_manage:
-                        continue
-
-                    with ui.row().classes("w-full text-sm leading-relaxed"):
-                        is_t = c.get("user_type") == "teacher"
-                        name_cls = "text-blue-500 font-bold" if is_t else "text-blue-500"
-
-                        if c.get("is_hidden_by_admin"):
-                            with ui.element("span").classes(
-                                "inline-flex items-center bg-red-100 text-red-600 text-xs "
-                                "px-2 py-0.5 rounded-full font-bold mr-1"
-                            ):
-                                ui.icon("block", size="xs").classes("mr-1")
-                                ui.label("被屏蔽")
-
-                        with ui.row().classes("gap-0"):
-                            ui.label(c.get("author_name", "?")).classes(f"text-sm {name_cls}")
-                            ui.label(f"：{c['content']}").classes("text-sm text-gray-600")
-
-                        with ui.row().classes("ml-auto gap-1 items-center"):
-                            c_can_del = c_is_author or post_can_manage
-                            c_can_hide = post_can_manage and not c_is_author
-
-                            if c_can_hide and not c.get("is_hidden_by_admin"):
-                                ui.button(
-                                    icon="visibility_off",
-                                    on_click=lambda cid=c["id"]: _hide_comment(cid, refresh_fn),
-                                ).props("flat dense size=sm color=orange icon-only")
-
-                            if c_can_hide and c.get("is_hidden_by_admin"):
-                                ui.button(
-                                    icon="visibility",
-                                    on_click=lambda cid=c["id"]: _unhide_comment(cid, refresh_fn),
-                                ).props("flat dense size=sm color=green icon-only")
-
-                            if c_can_del:
-                                ui.button(
-                                    icon="close",
-                                    on_click=lambda cid=c["id"], pid=post_data["id"]: _delete_comment_by_author(
-                                        cid, pid, refresh_fn
-                                    ),
-                                ).props("flat dense size=sm color=red icon-only")
-
-                            ui.button(
-                                icon="reply",
-                                on_click=lambda cid=c["id"]: _toggle_reply_box(cid),
-                            ).props("flat dense size=sm color=blue icon-only")
-
-                    replies = c.get("replies", [])
-                    if replies:
-                        with ui.column().classes("ml-4 mt-2"):
-                            for r in replies:
-                                if r.get("is_deleted_by_author"):
-                                    continue
-
-                                r_is_author = r.get("user_id") == current_user["user_id"]
-                                if r.get("is_hidden_by_admin") and not r_is_author and not post_can_manage:
-                                    continue
-
-                                with ui.row().classes("w-full text-xs leading-relaxed"):
-                                    is_tr = r.get("user_type") == "teacher"
-                                    r_name_cls = "text-blue-500 font-bold" if is_tr else "text-blue-500"
-
-                                    if r.get("is_hidden_by_admin"):
-                                        with ui.element("span").classes(
-                                            "inline-flex items-center bg-red-100 text-red-600 text-xs "
-                                            "px-2 py-0.5 rounded-full font-bold mr-1"
-                                        ):
-                                            ui.icon("block", size="xs").classes("mr-1")
-                                            ui.label("被屏蔽")
-
-                                    with ui.row().classes("gap-0"):
-                                        ui.label(r.get("author_name", "?")).classes(f"text-xs {r_name_cls}")
-                                        ui.label(f"：{r['content']}").classes("text-xs text-gray-600")
-
-                                    with ui.row().classes("ml-auto gap-1"):
-                                        if r_is_author:
-                                            ui.button(
-                                                icon="close",
-                                                on_click=lambda rid=r["id"]: _delete_reply_by_author(rid, refresh_fn),
-                                            ).props("flat dense size=sm color=red icon-only")
-
-                    reply_box = ui.expansion("回复...", value=False).classes("w-full mt-1").props("dense")
-                    with reply_box, ui.row().classes("w-full items-center gap-2"):
-                        reply_inp = ui.input(placeholder="回复...").classes("flex-1").props("outlined dense")
-                        ui.button(
-                            "发送",
-                            on_click=lambda cid=c["id"], ri=reply_inp: _add_reply(cid, ri, refresh_fn),
-                        ).props("dense size=sm color=primary")
-                    _reply_boxes[c["id"]] = reply_box
+                    _render_single_comment(c, current_user, refresh_fn, post_can_manage, post_data["id"])
 
         comment_box = ui.expansion("写评论...", value=False).classes("w-full mt-2").props("dense")
         with comment_box, ui.row().classes("w-full items-center gap-2"):
@@ -444,125 +455,144 @@ def _build_post_dict(post, author, org, comments, like_count: int, is_liked: boo
     }
 
 
+def _build_posts_query(db, user_obj, filter_org_id):
+    """Build the base post query for `load_posts`.
+
+    Returns (query, ok). When ok is False, the caller must return [] (either
+    the user lacks visibility for the requested filter, or no org ids are visible).
+    """
+    visible_ids = get_visible_org_ids(db, user_obj)
+    query = db.query(Post).filter(~Post.is_hidden, Post.org_id.in_(visible_ids))
+    if not filter_org_id:
+        return query, True
+
+    if isinstance(filter_org_id, list):
+        valid = [oid for oid in filter_org_id if oid in visible_ids]
+        if not valid:
+            return query, False
+        return query.filter(Post.org_id.in_(valid)), True
+
+    if filter_org_id in visible_ids:
+        return query.filter(Post.org_id == filter_org_id), True
+
+    return query, False
+
+
+def _collect_post_relations(db, filtered, viewer_id):
+    """Batch-load likes, comments, replies, users and orgs for the given posts.
+
+    Returns a dict containing the lookup tables needed for dict assembly.
+    """
+    post_ids = [p.id for p in filtered]
+    all_user_ids: set[str] = {p.user_id for p in filtered}
+
+    like_rows = db.query(Like.post_id, Like.user_id).filter(Like.post_id.in_(post_ids)).all()
+    like_count_map: dict[str, int] = {}
+    is_liked_set: set[str] = set()
+    for post_id, uid in like_rows:
+        like_count_map[post_id] = like_count_map.get(post_id, 0) + 1
+        if uid == viewer_id:
+            is_liked_set.add(post_id)
+
+    all_comments = db.query(Comment).filter(Comment.post_id.in_(post_ids)).order_by(Comment.created_at.asc()).all()
+    comment_ids = [c.id for c in all_comments]
+    for c in all_comments:
+        all_user_ids.add(c.user_id)
+
+    all_replies: list[Reply] = []
+    if comment_ids:
+        all_replies = db.query(Reply).filter(Reply.comment_id.in_(comment_ids)).order_by(Reply.created_at.asc()).all()
+        for r in all_replies:
+            all_user_ids.add(r.user_id)
+
+    users_map: dict[str, User] = {}
+    if all_user_ids:
+        user_rows = db.query(User).filter(User.id.in_(list(all_user_ids))).all()
+        users_map = {u.id: u for u in user_rows}
+
+    all_org_ids: set[str] = {p.org_id for p in filtered} | {p.visible_org_id for p in filtered if p.visible_org_id}
+    orgs_map: dict[str, Org] = {}
+    if all_org_ids:
+        org_rows = db.query(Org).filter(Org.id.in_(list(all_org_ids))).all()
+        orgs_map = {o.id: o for o in org_rows}
+
+    return {
+        "like_count_map": like_count_map,
+        "is_liked_set": is_liked_set,
+        "users_map": users_map,
+        "orgs_map": orgs_map,
+        "all_comments": all_comments,
+        "all_replies": all_replies,
+    }
+
+
+def _build_reply_dict(r, users_map):
+    """Convert a Reply ORM row to its API dict representation."""
+    ra = users_map.get(r.user_id)
+    return {
+        "id": r.id,
+        "user_id": r.user_id,
+        "user_type": ra.user_type if ra else "",
+        "content": r.content,
+        "author_name": (ra.nickname or ra.display_name or ra.username) if ra else "未知",
+        "is_hidden_by_admin": r.is_hidden_by_admin,
+        "is_deleted_by_author": r.is_deleted_by_author,
+    }
+
+
+def _build_comment_dict(c, users_map, replies_by_comment):
+    """Convert a Comment ORM row + its replies to its API dict representation."""
+    ca = users_map.get(c.user_id)
+    replies_data = [_build_reply_dict(r, users_map) for r in replies_by_comment.get(c.id, [])]
+    return {
+        "id": c.id,
+        "user_id": c.user_id,
+        "user_type": ca.user_type if ca else "",
+        "content": c.content,
+        "author_name": (ca.nickname or ca.display_name or ca.username) if ca else "未知",
+        "is_hidden_by_admin": c.is_hidden_by_admin,
+        "is_deleted_by_author": c.is_deleted_by_author,
+        "replies": replies_data,
+    }
+
+
 def load_posts(user: dict, filter_org_id=None) -> list[dict]:
     with get_db() as db:
         user_obj = db.query(User).filter(User.id == user["user_id"]).first()
         if not user_obj:
             return []
 
-        visible_ids = get_visible_org_ids(db, user_obj)
-
-        query = db.query(Post).filter(~Post.is_hidden, Post.org_id.in_(visible_ids))
-        if filter_org_id:
-            if isinstance(filter_org_id, list):
-                valid = [oid for oid in filter_org_id if oid in visible_ids]
-                if valid:
-                    query = query.filter(Post.org_id.in_(valid))
-                else:
-                    return []
-            elif filter_org_id in visible_ids:
-                query = query.filter(Post.org_id == filter_org_id)
-            else:
-                return []
+        query, ok = _build_posts_query(db, user_obj, filter_org_id)
+        if not ok:
+            return []
 
         posts = query.order_by(Post.created_at.desc()).limit(100).all()
 
-        # --- visibility: compute user_org_ids once ---
-        user_org_ids = _compute_user_org_ids(user_obj, db, visible_ids)
-
-        # --- filter posts by visibility ---
+        user_org_ids = _compute_user_org_ids(user_obj, db, get_visible_org_ids(db, user_obj))
         filtered = _apply_visibility_filters(posts, user["user_id"], user_org_ids)
-
         if not filtered:
             return []
 
-        # --- batch-load all related data ---
-        post_ids = [p.id for p in filtered]
-        all_user_ids: set[str] = {p.user_id for p in filtered}
+        rels = _collect_post_relations(db, filtered, user["user_id"])
+        users_map = rels["users_map"]
+        orgs_map = rels["orgs_map"]
+        like_count_map = rels["like_count_map"]
+        is_liked_set = rels["is_liked_set"]
 
-        # like counts + is_liked
-        like_rows = db.query(Like.post_id, Like.user_id).filter(Like.post_id.in_(post_ids)).all()
-        like_count_map: dict[str, int] = {}
-        is_liked_set: set[str] = set()
-        for post_id, uid in like_rows:
-            like_count_map[post_id] = like_count_map.get(post_id, 0) + 1
-            if uid == user["user_id"]:
-                is_liked_set.add(post_id)
-
-        # comments
-        all_comments = db.query(Comment).filter(Comment.post_id.in_(post_ids)).order_by(Comment.created_at.asc()).all()
-        comment_ids = [c.id for c in all_comments]
-        for c in all_comments:
-            all_user_ids.add(c.user_id)
-
-        # replies
-        all_replies: list[Reply] = []
-        if comment_ids:
-            all_replies = (
-                db.query(Reply).filter(Reply.comment_id.in_(comment_ids)).order_by(Reply.created_at.asc()).all()
-            )
-            for r in all_replies:
-                all_user_ids.add(r.user_id)
-
-        # users (authors)
-        users_map: dict[str, User] = {}
-        if all_user_ids:
-            user_rows = db.query(User).filter(User.id.in_(list(all_user_ids))).all()
-            users_map = {u.id: u for u in user_rows}
-
-        # orgs
-        all_org_ids: set[str] = {p.org_id for p in filtered} | {p.visible_org_id for p in filtered if p.visible_org_id}
-        orgs_map: dict[str, Org] = {}
-        if all_org_ids:
-            org_rows = db.query(Org).filter(Org.id.in_(list(all_org_ids))).all()
-            orgs_map = {o.id: o for o in org_rows}
-
-        # --- assemble result ---
-        # index comments by post_id
         comments_by_post: dict[str, list[Comment]] = {}
-        for c in all_comments:
+        for c in rels["all_comments"]:
             comments_by_post.setdefault(c.post_id, []).append(c)
-
-        # index replies by comment_id
         replies_by_comment: dict[str, list[Reply]] = {}
-        for r in all_replies:
+        for r in rels["all_replies"]:
             replies_by_comment.setdefault(r.comment_id, []).append(r)
 
         result: list[dict] = []
         for post in filtered:
             author = users_map.get(post.user_id)
             org = orgs_map.get(post.org_id)
-
-            comments_data: list[dict] = []
-            for c in comments_by_post.get(post.id, []):
-                ca = users_map.get(c.user_id)
-                replies_data: list[dict] = []
-                for r in replies_by_comment.get(c.id, []):
-                    ra = users_map.get(r.user_id)
-                    replies_data.append(
-                        {
-                            "id": r.id,
-                            "user_id": r.user_id,
-                            "user_type": ra.user_type if ra else "",
-                            "content": r.content,
-                            "author_name": (ra.nickname or ra.display_name or ra.username) if ra else "未知",
-                            "is_hidden_by_admin": r.is_hidden_by_admin,
-                            "is_deleted_by_author": r.is_deleted_by_author,
-                        }
-                    )
-                comments_data.append(
-                    {
-                        "id": c.id,
-                        "user_id": c.user_id,
-                        "user_type": ca.user_type if ca else "",
-                        "content": c.content,
-                        "author_name": (ca.nickname or ca.display_name or ca.username) if ca else "未知",
-                        "is_hidden_by_admin": c.is_hidden_by_admin,
-                        "is_deleted_by_author": c.is_deleted_by_author,
-                        "replies": replies_data,
-                    }
-                )
-
+            comments_data = [
+                _build_comment_dict(c, users_map, replies_by_comment) for c in comments_by_post.get(post.id, [])
+            ]
             result.append(
                 {
                     "id": post.id,

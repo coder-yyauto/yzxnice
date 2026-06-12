@@ -57,6 +57,25 @@ def _has_seat_access(user: dict) -> bool:
         return db.query(UserRole).filter(UserRole.user_id == u.id).count() > 0
 
 
+def _build_school_class_index(db, managed_ids: set[str]) -> dict:
+    """Group managed class orgs under their parent school."""
+    schools: dict = {}
+    for cid in managed_ids:
+        cls = db.query(Org).filter(Org.id == cid).first()
+        if not cls:
+            continue
+        school = None
+        for aid in get_org_ancestors(db, cid):
+            org = db.query(Org).filter(Org.id == aid).first()
+            if org and org.org_type == "school":
+                school = org
+                break
+        if school:
+            schools.setdefault(school.id, {"obj": school, "classes": []})
+            schools[school.id]["classes"].append(cls)
+    return schools
+
+
 @router.page("/admin/seats")
 async def seat_management():
     if not AuthManager.is_authenticated():
@@ -84,21 +103,7 @@ async def seat_management():
                 ui.label("没有可管理的班级").classes("text-gray-400")
                 return
 
-            schools = {}
-            for cid in managed_ids:
-                cls = db.query(Org).filter(Org.id == cid).first()
-                if not cls:
-                    continue
-                ancestors = get_org_ancestors(db, cid)
-                school = None
-                for aid in ancestors:
-                    org = db.query(Org).filter(Org.id == aid).first()
-                    if org and org.org_type == "school":
-                        school = org
-                        break
-                if school:
-                    schools.setdefault(school.id, {"obj": school, "classes": []})
-                    schools[school.id]["classes"].append(cls)
+            schools = _build_school_class_index(db, managed_ids)
 
         for _sid, sdata in sorted(schools.items(), key=lambda x: x[1]["obj"].name):
             school = sdata["obj"]

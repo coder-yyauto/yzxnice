@@ -40,7 +40,10 @@ async def login_page(request: Request):
         return
 
     expired = request.query_params.get("reason") == "expired"
+    _render_login_form(request, expired)
 
+
+def _render_login_form(request: Request, expired: bool) -> None:
     with (
         ui.column().classes(
             "w-full min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100"

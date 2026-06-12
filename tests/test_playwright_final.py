@@ -52,89 +52,80 @@ def login_and_navigate(page):
     return False
 
 
+def _inspect_post_comment_buttons(page) -> None:
+    """Click through comment buttons until a comment area with content is found."""
+    comment_buttons = page.get_by_text("评论")
+    if comment_buttons.count() < 1:
+        return
+    print(f"找到 {comment_buttons.count()} 个评论按钮")
+
+    for i in range(min(5, comment_buttons.count())):
+        print(f"\n尝试第 {i + 1} 个评论按钮...")
+        comment_buttons.nth(i).click()
+        time.sleep(3)
+
+        print(f"截图：点击第 {i + 1} 个评论按钮后")
+        page.screenshot(path=f"/tmp/test_comment_click_{i + 1}.png")
+
+        comment_area_content = page.content()
+
+        if "还不错" not in comment_area_content:
+            print("没有找到评论内容，继续尝试下一个按钮...")
+            page.go_back()
+            time.sleep(2)
+            continue
+
+        print("✓ 展开了包含评论的区域")
+
+        print("\n检查功能按钮:")
+
+        reply_buttons = page.get_by_text("回复")
+        if reply_buttons.count() > 0:
+            print(f"  ✓ 回复按钮: {reply_buttons.count()} 个")
+        else:
+            print("  ✗ 回复按钮: 0 个")
+
+        delete_buttons = page.get_by_text("删除")
+        if delete_buttons.count() > 0:
+            print(f"  ✓ 删除按钮: {delete_buttons.count()} 个")
+        else:
+            print("  ✗ 删除按钮: 0 个")
+
+        hide_texts = ["屏蔽", "visibility_off", "visibility"]
+        hide_found = False
+        for text in hide_texts:
+            elements = page.get_by_text(text)
+            if elements.count() > 0:
+                print(f"  ✓ 屏蔽功能 ('{text}'): {elements.count()} 个")
+                hide_found = True
+        if not hide_found:
+            print("  ✗ 屏蔽功能: 未找到")
+
+        if "被屏蔽" in comment_area_content:
+            print("  ✓ 被屏蔽提示: 存在")
+        else:
+            print("  ✗ 被屏蔽提示: 不存在")
+
+        print("\n返回上一页...")
+        page.go_back()
+        time.sleep(2)
+        break
+
+
 def test_specific_post_with_comment(page):
     """专门测试有评论的帖子"""
     print("\n=== 测试有评论的帖子功能 ===")
 
-    # 寻找包含"学生发的帖子"的帖子
-
     print("寻找学生发的帖子...")
     page_content = page.content()
 
-    if "学生发的帖子" in page_content:
-        print("✓ 找到学生发的帖子")
-    else:
+    if "学生发的帖子" not in page_content:
         print("✗ 未找到学生发的帖子")
         return
+    print("✓ 找到学生发的帖子")
 
-    # 检查该帖子区域的评论按钮
     print("检查该帖子的评论按钮...")
-    comment_buttons = page.get_by_text("评论")
-
-    if comment_buttons.count() >= 1:
-        print(f"找到 {comment_buttons.count()} 个评论按钮")
-
-        # 尝试点击不同的评论按钮
-        for i in range(min(5, comment_buttons.count())):
-            print(f"\n尝试第 {i + 1} 个评论按钮...")
-            comment_buttons.nth(i).click()
-            time.sleep(3)
-
-            print(f"截图：点击第 {i + 1} 个评论按钮后")
-            page.screenshot(path=f"/tmp/test_comment_click_{i + 1}.png")
-
-            comment_area_content = page.content()
-
-            # 检查评论内容
-            if "还不错" in comment_area_content:
-                print("✓ 展开了包含评论的区域")
-
-                # 详细检查功能按钮
-                print("\n检查功能按钮:")
-
-                # 检查回复按钮
-                reply_buttons = page.get_by_text("回复")
-                if reply_buttons.count() > 0:
-                    print(f"  ✓ 回复按钮: {reply_buttons.count()} 个")
-                else:
-                    print("  ✗ 回复按钮: 0 个")
-
-                # 检查删除按钮
-                delete_buttons = page.get_by_text("删除")
-                if delete_buttons.count() > 0:
-                    print(f"  ✓ 删除按钮: {delete_buttons.count()} 个")
-                else:
-                    print("  ✗ 删除按钮: 0 个")
-
-                # 检查屏蔽相关按钮
-                hide_texts = ["屏蔽", "visibility_off", "visibility"]
-                hide_found = False
-                for text in hide_texts:
-                    elements = page.get_by_text(text)
-                    if elements.count() > 0:
-                        print(f"  ✓ 屏蔽功能 ('{text}'): {elements.count()} 个")
-                        hide_found = True
-
-                if not hide_found:
-                    print("  ✗ 屏蔽功能: 未找到")
-
-                # 检查被屏蔽提示
-                if "被屏蔽" in comment_area_content:
-                    print("  ✓ 被屏蔽提示: 存在")
-                else:
-                    print("  ✗ 被屏蔽提示: 不存在")
-
-                # 找到评论功能后，返回继续测试其他功能
-                print("\n返回上一页...")
-                page.go_back()
-                time.sleep(2)
-                break
-            else:
-                print("没有找到评论内容，继续尝试下一个按钮...")
-
-                # 返回
-                page.go_back()
-                time.sleep(2)
+    _inspect_post_comment_buttons(page)
 
 
 def test_main_features(page):

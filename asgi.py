@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from nicegui import ui
 
 from app_factory import create_app
 from config import config
@@ -7,7 +8,6 @@ fastapi_app = FastAPI(title=config.APP_TITLE)
 
 create_app()
 
-from nicegui import ui
 
 ui.run_with(
     fastapi_app,

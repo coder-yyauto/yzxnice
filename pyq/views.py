@@ -32,16 +32,12 @@ async def home_page():
 
     user = AuthManager.get_current_user()
     filter_state = {"org_ids": None}
-    post_container = None
 
     with get_db() as db:
-        user_obj = db.query(User).filter(User.id == user["user_id"]).first()
-        is_teacher_view = user_obj and user_obj.user_type in ("teacher", "admin")
-        school_id = None
-        if is_teacher_view and user_obj:
-            school = get_user_school(db, user_obj)
-            if school:
-                school_id = school.id
+        user_obj, is_teacher_view, school_id, grades_data = _load_home_viewer(db, user)
+
+    def refresh_posts():
+        _render_posts_into(post_container, load_posts, render_post_card, user, filter_state)
 
     with (
         ui.column().classes("w-full min-h-screen bg-[#ededed] items-center"),
@@ -55,77 +51,91 @@ async def home_page():
                 ).tooltip("发布动态")
 
         if is_teacher_view and school_id:
-            with get_db() as db:
-                _grades_data = []
-                for grade in get_grades(db, school_id):
-                    classes = get_classes(db, grade.id)
-                    _grades_data.append(
-                        {
-                            "id": grade.id,
-                            "name": grade.name,
-                            "classes": [{"id": c.id, "name": c.name} for c in classes],
-                        }
-                    )
-
-            filter_label = (
-                ui.button("查看范围: 全部", on_click=lambda: _open_filter_dialog())
-                .props("flat no-caps dense size=sm color=grey-7")
-                .classes("text-xs")
-            )
-
-            def _open_filter_dialog():
-                with ui.dialog() as dialog, ui.card().classes("w-80 p-4"):
-                    ui.label("查看范围").classes("text-base font-bold mb-3")
-
-                    with ui.column().classes("w-full gap-0"):
-                        ui.button(
-                            "全部",
-                            on_click=lambda: _do_select([], "查看范围: 全部", dialog),
-                        ).props("flat no-caps dense align=left").classes("w-full text-left")
-
-                        for g in _grades_data:
-                            with ui.expansion(g["name"], group="filter_tree").classes("w-full"):
-                                ui.button(
-                                    f"{g['name']}(全选)",
-                                    on_click=lambda grade=g: _do_select(
-                                        [c["id"] for c in grade["classes"]], f"查看范围: {grade['name']}", dialog
-                                    ),
-                                ).props("flat no-caps dense align=left color=primary").classes(
-                                    "w-full text-left text-sm"
-                                )
-                                for cls_ in g["classes"]:
-                                    ui.button(
-                                        cls_["name"],
-                                        on_click=lambda c=cls_: _do_select([c["id"]], f"查看范围: {c['name']}", dialog),
-                                    ).props("flat no-caps dense align=left").classes("w-full text-left text-sm")
-                dialog.open()
-
-            def _do_select(ids, label_text, dialog):
-                if ids:
-                    filter_state["org_ids"] = ids
-                else:
-                    filter_state["org_ids"] = None
-                filter_label.set_text(label_text)
-                dialog.close()
-                refresh_posts()
-
-        def refresh_posts():
-            if post_container:
-                post_container.clear()
-                with post_container:
-                    posts = load_posts(user, filter_state.get("org_ids"))
-                    if not posts:
-                        ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
-                    for pd in posts:
-                        render_post_card(pd, user, refresh_posts)
+            _render_filter_selector(grades_data, filter_state, refresh_posts)
 
         post_container = ui.column().classes("w-full")
-        with post_container:
-            posts = load_posts(user, filter_state.get("org_ids"))
-            if not posts:
-                ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
-            for pd in posts:
-                render_post_card(pd, user, refresh_posts)
+        refresh_posts()
+
+
+def _load_home_viewer(db, user):
+    """Resolve the viewer's role, school, and grade/class tree for the home page."""
+    user_obj = db.query(User).filter(User.id == user["user_id"]).first()
+    is_teacher_view = user_obj and user_obj.user_type in ("teacher", "admin")
+    school_id = None
+    if is_teacher_view and user_obj:
+        school = get_user_school(db, user_obj)
+        if school:
+            school_id = school.id
+
+    grades_data: list[dict] = []
+    if is_teacher_view and school_id:
+        for grade in get_grades(db, school_id):
+            classes = get_classes(db, grade.id)
+            grades_data.append(
+                {
+                    "id": grade.id,
+                    "name": grade.name,
+                    "classes": [{"id": c.id, "name": c.name} for c in classes],
+                }
+            )
+    return user_obj, is_teacher_view, school_id, grades_data
+
+
+def _render_filter_selector(grades_data, filter_state, refresh_fn):
+    """Render the '查看范围' button plus the grade/class filter dialog."""
+    filter_label = (
+        ui.button("查看范围: 全部", on_click=lambda: _open_filter_dialog())
+        .props("flat no-caps dense size=sm color=grey-7")
+        .classes("text-xs")
+    )
+
+    def _do_select(ids, label_text, dialog):
+        filter_state["org_ids"] = ids if ids else None
+        filter_label.set_text(label_text)
+        dialog.close()
+        refresh_fn()
+
+    def _open_filter_dialog():
+        with ui.dialog() as dialog, ui.card().classes("w-80 p-4"):
+            ui.label("查看范围").classes("text-base font-bold mb-3")
+
+            with ui.column().classes("w-full gap-0"):
+                ui.button(
+                    "全部",
+                    on_click=lambda: _do_select([], "查看范围: 全部", dialog),
+                ).props("flat no-caps dense align=left").classes("w-full text-left")
+
+                for g in grades_data:
+                    with ui.expansion(g["name"], group="filter_tree").classes("w-full"):
+                        ui.button(
+                            f"{g['name']}(全选)",
+                            on_click=lambda grade=g: _do_select(
+                                [c["id"] for c in grade["classes"]],
+                                f"查看范围: {grade['name']}",
+                                dialog,
+                            ),
+                        ).props("flat no-caps dense align=left color=primary").classes("w-full text-left text-sm")
+                        for cls_ in g["classes"]:
+                            ui.button(
+                                cls_["name"],
+                                on_click=lambda c=cls_: _do_select([c["id"]], f"查看范围: {c['name']}", dialog),
+                            ).props("flat no-caps dense align=left").classes("w-full text-left text-sm")
+        dialog.open()
+
+
+def _render_posts_into(post_container, load_posts, render_post_card, user, filter_state):
+    """Clear `post_container` and re-render the user's filtered posts."""
+    post_container.clear()
+    with post_container:
+        posts = load_posts(user, filter_state.get("org_ids"))
+        if not posts:
+            ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
+        for pd in posts:
+
+            def _reload():
+                _render_posts_into(post_container, load_posts, render_post_card, user, filter_state)
+
+            render_post_card(pd, user, _reload)
 
 
 @router.page("/publish")
@@ -137,24 +147,11 @@ async def publish_page():
     user = AuthManager.get_current_user()
 
     with get_db() as db:
-        user_obj = db.query(User).filter(User.id == user["user_id"]).first()
-        if not user_obj:
-            ui.navigate.to("/home")
-            return
-
-        if user_obj.user_type == "student":
-            default_org_id = user_obj.default_org_id
-            org_tree = _get_student_org_tree(db, user_obj)
-        elif user_obj.user_type == "teacher":
-            school = get_user_school(db, user_obj)
-            default_org_id = school.id if school else user_obj.default_org_id
-            org_tree = _get_teacher_org_tree(db, user_obj)
-        elif user_obj.user_type == "admin":
-            default_org_id = user_obj.default_org_id
-            org_tree = _get_admin_org_tree(db)
-        else:
-            default_org_id = None
-            org_tree = {}
+        ctx = _resolve_publish_context(db, user)
+    if ctx is None:
+        ui.navigate.to("/home")
+        return
+    default_org_id, org_tree = ctx
 
     state = {
         "files": [],
@@ -164,56 +161,66 @@ async def publish_page():
         "excluded_orgs": [],
     }
 
-    async def handle_upload(e):
-        ext = os.path.splitext(e.file.name)[1].lower()
-        if ext.lstrip(".") not in {"png", "jpg", "jpeg", "gif", "webp"}:
-            ui.notify("仅支持图片", type="warning")
-            return
-        ts = int(time.time())
-        uid = uuid.uuid4().hex[:8]
-        safe_name = f"{ts}_{uid}{ext}"
-        upload_dir = config.absolute_upload_dir
-        os.makedirs(upload_dir, exist_ok=True)
-        await e.file.save(os.path.join(upload_dir, safe_name))
-        state["files"].append(safe_name)
-        refresh_preview()
+    _render_publish_form(state, org_tree, user["user_id"], default_org_id)
 
-    async def handle_publish():
-        content = content_input.value.strip()
-        if not content and not state["files"]:
-            ui.notify("请输入内容或上传图片", type="warning")
-            return
 
-        with get_db() as db:
-            u = db.query(User).filter(User.id == user["user_id"]).first()
-            if not u:
-                return
-            org = db.query(Org).filter(Org.id == default_org_id).first()
-            if org and org.org_type == "school":
-                visible_org_id = org.id
-            elif org:
-                s = get_school_root(db, org.id)
-                visible_org_id = s.id if s else default_org_id
-            else:
-                visible_org_id = default_org_id
+def _resolve_publish_context(db, user):
+    """Resolve the user's default org id and org tree for publishing.
 
-            post = Post(
-                user_id=u.id,
-                content=content,
-                images=",".join(state["files"]) if state["files"] else None,
-                org_id=default_org_id,
-                visible_org_id=visible_org_id,
-                visibility=state["visibility"],
-                show_location=state["show_location"],
-                visible_to_orgs=",".join(state["visible_to_orgs"]) if state["visible_to_orgs"] else None,
-                excluded_orgs=",".join(state["excluded_orgs"]) if state["excluded_orgs"] else None,
-            )
-            db.add(post)
-            db.commit()
+    Returns (default_org_id, org_tree) or None if the user no longer exists.
+    """
+    user_obj = db.query(User).filter(User.id == user["user_id"]).first()
+    if not user_obj:
+        return None
 
-        ui.notify("发布成功", type="positive")
-        ui.navigate.to("/home")
+    if user_obj.user_type == "student":
+        return user_obj.default_org_id, _get_student_org_tree(db, user_obj)
+    if user_obj.user_type == "teacher":
+        school = get_user_school(db, user_obj)
+        default_org_id = school.id if school else user_obj.default_org_id
+        return default_org_id, _get_teacher_org_tree(db, user_obj)
+    if user_obj.user_type == "admin":
+        return user_obj.default_org_id, _get_admin_org_tree(db)
+    return None, {}
 
+
+def _create_publish_post(db, user_id, content, state, default_org_id) -> bool:
+    """Insert a new post row derived from the publish form state. Returns False if user is gone."""
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        return False
+    org = db.query(Org).filter(Org.id == default_org_id).first()
+    if org and org.org_type == "school":
+        visible_org_id = org.id
+    elif org:
+        s = get_school_root(db, org.id)
+        visible_org_id = s.id if s else default_org_id
+    else:
+        visible_org_id = default_org_id
+
+    post = Post(
+        user_id=u.id,
+        content=content,
+        images=",".join(state["files"]) if state["files"] else None,
+        org_id=default_org_id,
+        visible_org_id=visible_org_id,
+        visibility=state["visibility"],
+        show_location=state["show_location"],
+        visible_to_orgs=",".join(state["visible_to_orgs"]) if state["visible_to_orgs"] else None,
+        excluded_orgs=",".join(state["excluded_orgs"]) if state["excluded_orgs"] else None,
+    )
+    db.add(post)
+    db.commit()
+    return True
+
+
+def _render_publish_form(state, org_tree, user_id, default_org_id):
+    """Build the publish form UI and wire its upload + submit handlers.
+
+    `handle_upload` and `handle_publish` close over the local `content_input`
+    and `refresh_preview` defined here, so they must be created inside this
+    function.
+    """
     with (
         ui.column().classes("w-full min-h-screen bg-[#ededed] items-center"),
         ui.column().classes("w-full max-w-[428px]"),
@@ -222,7 +229,7 @@ async def publish_page():
             "w-full h-12 bg-white border-b border-gray-200 items-center justify-between px-4 sticky top-0 z-50"
         ):
             ui.button("取消", on_click=lambda: ui.navigate.to("/home")).props("flat no-caps color=grey-7 text-base")
-            ui.button("发表", on_click=handle_publish).props(
+            publish_btn = ui.button("发表", on_click=lambda: None).props(
                 "flat no-caps color=green-600 text-green-600 text-base font-bold"
             )
 
@@ -247,10 +254,24 @@ async def publish_page():
                                     icon="close",
                                     on_click=lambda i=img: _remove_image(i, state, refresh_preview),
                                 ).props("flat dense round size=xs color=white").classes(
-                                    "absolute top-0 right-0 bg-black/40 rounded-full min-w-[20px] min-h-[20px]"
+                                    "absolute top-0 right-0 bg-black/40 rounded-full min-w-[20px] min-h=[20px]"
                                 )
 
                 refresh_preview()
+
+                async def handle_upload(e):
+                    ext = os.path.splitext(e.file.name)[1].lower()
+                    if ext.lstrip(".") not in {"png", "jpg", "jpeg", "gif", "webp"}:
+                        ui.notify("仅支持图片", type="warning")
+                        return
+                    ts = int(time.time())
+                    uid = uuid.uuid4().hex[:8]
+                    safe_name = f"{ts}_{uid}{ext}"
+                    upload_dir = config.absolute_upload_dir
+                    os.makedirs(upload_dir, exist_ok=True)
+                    await e.file.save(os.path.join(upload_dir, safe_name))
+                    state["files"].append(safe_name)
+                    refresh_preview()
 
                 ui.upload(
                     on_upload=handle_upload,
@@ -297,6 +318,20 @@ async def publish_page():
                 with ui.row().classes("items-center gap-1"):
                     excl_label = ui.label("不限").classes("text-sm text-gray-500")
                     ui.icon("chevron_right").classes("text-gray-400 text-lg")
+
+        async def handle_publish():
+            content = content_input.value.strip()
+            if not content and not state["files"]:
+                ui.notify("请输入内容或上传图片", type="warning")
+                return
+            with get_db() as db:
+                ok = _create_publish_post(db, user_id, content, state, default_org_id)
+            if not ok:
+                return
+            ui.notify("发布成功", type="positive")
+            ui.navigate.to("/home")
+
+        publish_btn.on("click", lambda: handle_publish())
 
 
 def _remove_image(img_name, state, refresh_fn):

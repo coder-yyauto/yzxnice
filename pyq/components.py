@@ -81,10 +81,44 @@ def _handle_logout():
     ui.navigate.to("/login")
 
 
+def _show_msg(msg_label, text: str) -> None:
+    """Display a message in the dialog's error label."""
+    msg_label.set_text(text)
+    msg_label.classes(remove="hidden")
+
+
+def _apply_password_change(u, old_pwd: str, new_pwd: str, confirm_pwd: str, msg_label):
+    """Validate inputs and update the user's password.
+
+    Returns True if the password was changed, False if the user provided no
+    password inputs, or None if validation failed (msg_label is updated in that case).
+    """
+    from core.security import PasswordManager
+
+    if not (old_pwd or new_pwd or confirm_pwd):
+        return False
+    if not old_pwd:
+        _show_msg(msg_label, "请输入当前密码")
+        return None
+    if not new_pwd:
+        _show_msg(msg_label, "请输入新密码")
+        return None
+    if new_pwd != confirm_pwd:
+        _show_msg(msg_label, "两次密码不一致")
+        return None
+    if len(new_pwd) < 6:
+        _show_msg(msg_label, "密码至少6位")
+        return None
+    if not PasswordManager.verify_password(u.password_hash, old_pwd):
+        _show_msg(msg_label, "当前密码错误")
+        return None
+    u.set_password(new_pwd)
+    return True
+
+
 def _show_my_info():
     from core.auth import AuthManager
     from core.models import User
-    from core.security import PasswordManager
     from database import get_db
 
     user = AuthManager.get_current_user()
@@ -113,46 +147,25 @@ def _show_my_info():
             new_pwd = new_input.value
             confirm_pwd = confirm_input.value
 
-            changed = False
-
             with get_db() as db:
                 u = db.query(User).filter(User.id == user["user_id"]).first()
                 if not u:
-                    msg_label.set_text("用户不存在")
-                    msg_label.classes(remove="hidden")
+                    _show_msg(msg_label, "用户不存在")
                     return
 
+                changed = False
                 if new_nickname and new_nickname != (u.nickname or ""):
                     u.nickname = new_nickname
                     changed = True
 
-                if old_pwd or new_pwd or confirm_pwd:
-                    if not old_pwd:
-                        msg_label.set_text("请输入当前密码")
-                        msg_label.classes(remove="hidden")
-                        return
-                    if not new_pwd:
-                        msg_label.set_text("请输入新密码")
-                        msg_label.classes(remove="hidden")
-                        return
-                    if new_pwd != confirm_pwd:
-                        msg_label.set_text("两次密码不一致")
-                        msg_label.classes(remove="hidden")
-                        return
-                    if len(new_pwd) < 6:
-                        msg_label.set_text("密码至少6位")
-                        msg_label.classes(remove="hidden")
-                        return
-                    if not PasswordManager.verify_password(u.password_hash, old_pwd):
-                        msg_label.set_text("当前密码错误")
-                        msg_label.classes(remove="hidden")
-                        return
-                    u.set_password(new_pwd)
+                pwd_ok = _apply_password_change(u, old_pwd, new_pwd, confirm_pwd, msg_label)
+                if pwd_ok is None:
+                    return
+                if pwd_ok:
                     changed = True
 
                 if not changed:
-                    msg_label.set_text("没有变更")
-                    msg_label.classes(remove="hidden")
+                    _show_msg(msg_label, "没有变更")
                     return
 
                 db.commit()
