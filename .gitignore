@@ -1,9 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pixi/
+
+# 项目运行数据
 run/
 data/*.duckdb
 data/*.duckdb.wal
 static/uploads/
+
+# nicegui 用户会话
 .nicegui/
-__pycache__/
-*.pyc
-.pixi/
-*.egg-info/
+
+# 本机环境与配置（密钥不进仓库）
+.env
+.env.local
+.env.*.local
+*.env
+!/.env.example
+
+# 日志
+*.log
+app.log
+!/.gitkeep
+
+# 工具链配置（用户级，不是项目级）
+crush.json
+
+# 本地调试笔记
+duckdb_locked.md
+
+# macOS
+.DS_Store
+
+# SAST 报告（按需保留时显式 git add -f）
+sast_scan_reports/
+
+# 编辑器/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
