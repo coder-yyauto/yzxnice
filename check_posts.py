@@ -11,7 +11,7 @@ from core.models import Post, User
 from database import get_db, init_db
 
 
-def check_posts():
+def check_posts() -> None:
     init_db()
 
     with get_db() as db:

@@ -21,7 +21,7 @@ class Config:
     INIT_ADMIN_PASSWORD = os.getenv("INIT_ADMIN_PASSWORD") or DEFAULT_PASSWORD
 
     @property
-    def absolute_upload_dir(self):
+    def absolute_upload_dir(self) -> str:
         """返回绝对路径的上传目录"""
         if os.path.isabs(self.UPLOAD_DIR):
             return self.UPLOAD_DIR

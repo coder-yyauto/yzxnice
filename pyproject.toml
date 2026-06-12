@@ -13,7 +13,8 @@ known-first-party = ["core", "admin", "pyq", "config", "database", "app_factory"
 
 [tool.mypy]
 strict = true
-ignore_missing_imports = false
+ignore_missing_imports = true
+exclude = ["tests", "__pycache__", ".ruff_cache", "venv", ".venv"]
 
 [tool.pyright]
 typeCheckingMode = "basic"

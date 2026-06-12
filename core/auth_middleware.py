@@ -1,9 +1,11 @@
 import time
+from collections.abc import Awaitable, Callable
 
-from fastapi import Request
 from fastapi.responses import RedirectResponse
 from nicegui import app
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response
 
 from config import config
 
@@ -18,8 +20,10 @@ STATIC_PREFIXES = (
 SESSION_MAX_AGE = config.SESSION_EXPIRE_HOURS * 3600
 
 
-class AuthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+class AuthMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
+    async def dispatch(
+        self, request: StarletteRequest, call_next: Callable[[StarletteRequest], Awaitable[Response]]
+    ) -> Response:
         path = request.url.path
         if path in UNRESTRICTED_ROUTES:
             return await call_next(request)

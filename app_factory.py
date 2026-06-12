@@ -1,5 +1,5 @@
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from nicegui import app, ui
 
@@ -30,8 +30,8 @@ def create_app() -> None:
     app.include_router(pyq_router)
     app.include_router(admin_router)
 
-    @ui.page("/")
-    async def index():
+    @ui.page("/")  # type: ignore[misc]
+    async def index() -> None:
         from core.auth import AuthManager
 
         if not AuthManager.is_authenticated():
@@ -40,7 +40,7 @@ def create_app() -> None:
             ui.navigate.to("/home")
 
 
-def _get_login_router():
+def _get_login_router() -> Any:
     from ui_login import router as login_router
 
     return login_router

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -7,7 +8,7 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 
-class Org(Base):
+class Org(Base):  # type: ignore[misc]
     __tablename__ = "org"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -23,19 +24,19 @@ class Org(Base):
 
     parent = relationship("Org", remote_side=[id], backref="children")
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
-            "id": self.id,
-            "name": self.name,
-            "org_type": self.org_type,
-            "parent_id": self.parent_id,
-            "school_code": self.school_code,
-            "grade_number": self.grade_number,
-            "class_number": self.class_number,
+            "id": str(self.id),
+            "name": str(self.name),
+            "org_type": str(self.org_type),
+            "parent_id": str(self.parent_id) if self.parent_id is not None else None,
+            "school_code": str(self.school_code) if self.school_code is not None else None,
+            "grade_number": int(self.grade_number) if self.grade_number is not None else None,
+            "class_number": int(self.class_number) if self.class_number is not None else None,
         }
 
 
-class User(Base):
+class User(Base):  # type: ignore[misc]
     __tablename__ = "user"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -52,7 +53,7 @@ class User(Base):
     roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
     posts = relationship("Post", back_populates="author")
 
-    def set_password(self, password: str):
+    def set_password(self, password: str) -> None:
         from core.security import PasswordManager
 
         self.password_hash = PasswordManager.hash_password(password)
@@ -62,19 +63,19 @@ class User(Base):
 
         return PasswordManager.verify_password(self.password_hash, password)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
-            "id": self.id,
-            "username": self.username,
-            "display_name": self.display_name,
-            "nickname": self.nickname,
-            "user_type": self.user_type,
-            "default_org_id": self.default_org_id,
-            "is_active": self.is_active,
+            "id": str(self.id),
+            "username": str(self.username),
+            "display_name": str(self.display_name) if self.display_name is not None else None,
+            "nickname": str(self.nickname) if self.nickname is not None else None,
+            "user_type": str(self.user_type),
+            "default_org_id": str(self.default_org_id) if self.default_org_id is not None else None,
+            "is_active": bool(self.is_active),
         }
 
 
-class UserRole(Base):
+class UserRole(Base):  # type: ignore[misc]
     __tablename__ = "user_role"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -85,16 +86,16 @@ class UserRole(Base):
     user = relationship("User", back_populates="roles")
     scope_org = relationship("Org")
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "role": self.role,
-            "scope_org_id": self.scope_org_id,
+            "id": str(self.id),
+            "user_id": str(self.user_id),
+            "role": str(self.role),
+            "scope_org_id": str(self.scope_org_id),
         }
 
 
-class Post(Base):
+class Post(Base):  # type: ignore[misc]
     __tablename__ = "post"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -117,25 +118,25 @@ class Post(Base):
     likes = relationship("Like", back_populates="post", cascade="all, delete-orphan")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "content": self.content,
+            "id": str(self.id),
+            "user_id": str(self.user_id),
+            "content": str(self.content),
             "images": self.images.split(",") if self.images else [],
-            "org_id": self.org_id,
-            "visible_org_id": self.visible_org_id,
-            "is_hidden": self.is_hidden,
-            "is_hidden_by_admin": self.is_hidden_by_admin,
-            "visibility": self.visibility or "public",
-            "show_location": self.show_location if self.show_location is not None else True,
+            "org_id": str(self.org_id),
+            "visible_org_id": str(self.visible_org_id) if self.visible_org_id is not None else None,
+            "is_hidden": bool(self.is_hidden),
+            "is_hidden_by_admin": bool(self.is_hidden_by_admin),
+            "visibility": str(self.visibility) if self.visibility else "public",
+            "show_location": bool(self.show_location) if self.show_location is not None else True,
             "visible_to_orgs": self.visible_to_orgs.split(",") if self.visible_to_orgs else [],
             "excluded_orgs": self.excluded_orgs.split(",") if self.excluded_orgs else [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
-class Like(Base):
+class Like(Base):  # type: ignore[misc]
     __tablename__ = "like"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -147,7 +148,7 @@ class Like(Base):
     user = relationship("User")
 
 
-class Comment(Base):
+class Comment(Base):  # type: ignore[misc]
     __tablename__ = "comment"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -162,19 +163,19 @@ class Comment(Base):
     user = relationship("User")
     replies = relationship("Reply", back_populates="comment", cascade="all, delete-orphan")
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
-            "id": self.id,
-            "post_id": self.post_id,
-            "user_id": self.user_id,
-            "content": self.content,
-            "is_hidden_by_admin": self.is_hidden_by_admin,
-            "is_deleted_by_author": self.is_deleted_by_author,
+            "id": str(self.id),
+            "post_id": str(self.post_id),
+            "user_id": str(self.user_id),
+            "content": str(self.content),
+            "is_hidden_by_admin": bool(self.is_hidden_by_admin),
+            "is_deleted_by_author": bool(self.is_deleted_by_author),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
-class Reply(Base):
+class Reply(Base):  # type: ignore[misc]
     __tablename__ = "reply"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -188,19 +189,19 @@ class Reply(Base):
     comment = relationship("Comment", back_populates="replies")
     user = relationship("User")
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
-            "id": self.id,
-            "comment_id": self.comment_id,
-            "user_id": self.user_id,
-            "content": self.content,
-            "is_hidden_by_admin": self.is_hidden_by_admin,
-            "is_deleted_by_author": self.is_deleted_by_author,
+            "id": str(self.id),
+            "comment_id": str(self.comment_id),
+            "user_id": str(self.user_id),
+            "content": str(self.content),
+            "is_hidden_by_admin": bool(self.is_hidden_by_admin),
+            "is_deleted_by_author": bool(self.is_deleted_by_author),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
-class LoginAttempt(Base):
+class LoginAttempt(Base):  # type: ignore[misc]
     __tablename__ = "login_attempt"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

@@ -1,6 +1,8 @@
 import logging
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
@@ -31,7 +33,7 @@ ScopedSession = scoped_session(SessionLocal)
 
 
 @contextmanager
-def get_db():
+def get_db() -> Iterator[Any]:
     session = ScopedSession()
     try:
         yield session
@@ -41,14 +43,14 @@ def get_db():
         raise
 
 
-def init_db():
+def init_db() -> None:
     Base.metadata.create_all(bind=engine, checkfirst=True)
     _migrate_post_visibility()
     _migrate_user_nickname()
     print("数据库初始化完成")
 
 
-def _migrate_post_visibility():
+def _migrate_post_visibility() -> None:
     from sqlalchemy import text
 
     new_cols = [
@@ -71,7 +73,7 @@ def _migrate_post_visibility():
     logger.info("post表字段迁移完成")
 
 
-def _migrate_user_nickname():
+def _migrate_user_nickname() -> None:
     from sqlalchemy import text
 
     new_cols = [

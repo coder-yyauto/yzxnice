@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from sqlalchemy.orm import Session
 
 from core.models import Org, User
@@ -46,13 +48,16 @@ def get_user_school(db: Session, user: User) -> Org | None:
         if class_org and class_org.parent_id:
             grade_org: Org | None = db.query(Org).filter(Org.id == class_org.parent_id).first()
             if grade_org and grade_org.parent_id:
-                return db.query(Org).filter(Org.id == grade_org.parent_id).first()
+                return cast(
+                    "Org | None",
+                    db.query(Org).filter(Org.id == grade_org.parent_id).first(),
+                )
     return None
 
 
 def get_visible_org_ids(db: Session, user: User) -> list[str]:
     if user.user_type == "admin":
-        return [o.id for o in db.query(Org).filter(Org.is_active).all()]
+        return [cast(str, o.id) for o in db.query(Org).filter(Org.is_active).all()]
 
     school: Org | None = get_user_school(db, user)
     if not school:
@@ -70,7 +75,7 @@ def get_visible_org_ids(db: Session, user: User) -> list[str]:
 def get_manageable_org_ids(db: Session, user: User) -> list[str]:
     if user.user_type == "admin":
         all_orgs: list[Org] = db.query(Org).filter(Org.is_active).all()
-        return [o.id for o in all_orgs]
+        return [cast(str, o.id) for o in all_orgs]
 
     if user.user_type == "student":
         return []
@@ -89,22 +94,27 @@ def get_manageable_org_ids(db: Session, user: User) -> list[str]:
 
 
 def get_schools(db: Session) -> list[Org]:
-    return db.query(Org).filter(Org.org_type == "school", Org.is_active).all()
+    return cast(
+        "list[Org]",
+        db.query(Org).filter(Org.org_type == "school", Org.is_active).all(),
+    )
 
 
 def get_grades(db: Session, school_id: str) -> list[Org]:
-    return (
+    return cast(
+        "list[Org]",
         db.query(Org)
         .filter(Org.org_type == "grade", Org.parent_id == school_id, Org.is_active)
         .order_by(Org.grade_number)
-        .all()
+        .all(),
     )
 
 
 def get_classes(db: Session, grade_id: str) -> list[Org]:
-    return (
+    return cast(
+        "list[Org]",
         db.query(Org)
         .filter(Org.org_type == "class", Org.parent_id == grade_id, Org.is_active)
         .order_by(Org.class_number)
-        .all()
+        .all(),
     )

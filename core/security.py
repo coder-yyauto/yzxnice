@@ -9,6 +9,7 @@ import string
 import time
 import uuid
 from datetime import datetime, timedelta
+from typing import cast
 
 import argon2
 from PIL import Image, ImageDraw, ImageFont
@@ -21,7 +22,7 @@ class PasswordManager:
 
     @classmethod
     def hash_password(cls, password: str) -> str:
-        return cls._hasher.hash(password)
+        return cast(str, cls._hasher.hash(password))
 
     @classmethod
     def verify_password(cls, hashed_password: str, password: str) -> bool:
@@ -53,13 +54,14 @@ class LoginAttemptManager:
 
         cutoff = datetime.utcnow() - timedelta(seconds=cls.LOCK_SECONDS)
         with get_db() as db:
-            return (
+            return cast(
+                int,
                 db.query(LoginAttempt)
                 .filter(
                     LoginAttempt.username == username,
                     LoginAttempt.attempted_at >= cutoff,
                 )
-                .count()
+                .count(),
             )
 
     @classmethod
@@ -96,7 +98,7 @@ class LoginAttemptManager:
                 )
                 .count()
             )
-        return count >= cls.MAX_IP_ATTEMPTS
+        return cast(bool, count >= cls.MAX_IP_ATTEMPTS)
 
     @classmethod
     def reset(cls, username: str) -> None:
@@ -183,14 +185,14 @@ class CaptchaManager:
                 fill=(random.randint(150, 200), random.randint(150, 200), random.randint(150, 200)),
             )
         for i, char in enumerate(text):
-            x: int = int(text_x + i * char_spacing + random.randint(-3, 3))
-            y: int = int(text_y + random.randint(-3, 3))
+            cx: int = int(text_x + i * char_spacing + random.randint(-3, 3))
+            cy: int = int(text_y + random.randint(-3, 3))
             color: tuple[int, int, int] = (
                 random.randint(30, 100),
                 random.randint(30, 100),
                 random.randint(30, 100),
             )
-            draw.text((x, y), char, font=font, fill=color)
+            draw.text((cx, cy), char, font=font, fill=color)
         return image
 
     @classmethod

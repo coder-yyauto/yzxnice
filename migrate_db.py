@@ -7,7 +7,7 @@ from database import engine
 logger = logging.getLogger(__name__)
 
 
-def migrate():
+def migrate() -> None:
     """Add new columns and tables for admin blocking and comment replies"""
 
     migrations = [

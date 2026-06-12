@@ -8,7 +8,7 @@ from core.models import Org, User
 from database import get_db, init_db
 
 
-def cleanup_data():
+def cleanup_data() -> None:
     """清洗数据：只保留根组织和超级管理员"""
 
     # 删除数据库文件

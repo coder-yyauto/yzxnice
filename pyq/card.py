@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from typing import Any, cast
 
 from nicegui import ui
 
@@ -10,7 +11,7 @@ from core.permissions import can_delete_post, can_manage_post
 from database import get_db
 
 
-def _resolve_post_permissions(post_data: dict, current_user: dict) -> tuple[bool, bool, bool]:
+def _resolve_post_permissions(post_data: dict[str, Any], current_user: dict[str, Any]) -> tuple[bool, bool, bool]:
     """Return (is_author, can_delete, can_hide) for a post."""
     is_author = post_data.get("user_id") == current_user["user_id"]
     can_del = is_author
@@ -27,7 +28,7 @@ def _resolve_post_permissions(post_data: dict, current_user: dict) -> tuple[bool
     return is_author, can_del, can_hide
 
 
-def render_post_card(post_data: dict, current_user: dict, refresh_fn=None):
+def render_post_card(post_data: dict[str, Any], current_user: dict[str, Any], refresh_fn: Any = None) -> None:
     is_author, can_del, can_hide = _resolve_post_permissions(post_data, current_user)
 
     if post_data.get("is_hidden_by_admin") and not is_author and not can_hide:
@@ -106,7 +107,7 @@ def render_post_card(post_data: dict, current_user: dict, refresh_fn=None):
             _render_comments(post_data, current_user, refresh_fn, can_hide)
 
 
-def _render_image_grid(images):
+def _render_image_grid(images: list[str]) -> None:
     count = len(images)
     if count == 0:
         return
@@ -132,7 +133,7 @@ def _render_image_grid(images):
                     ui.image(f"/static/uploads/{img}").classes("w-full h-full object-cover")
 
 
-def _show_image_viewer(img_name):
+def _show_image_viewer(img_name: str) -> None:
     with (
         ui.dialog() as dialog,
         ui.element("div")
@@ -151,16 +152,16 @@ def _show_image_viewer(img_name):
     dialog.open()
 
 
-_comment_boxes = {}
+_comment_boxes: dict[str, Any] = {}
 
 
-def _toggle_comment_box(post_id):
+def _toggle_comment_box(post_id: str) -> None:
     if post_id in _comment_boxes:
         box = _comment_boxes[post_id]
         box.set_value(not box.value)
 
 
-def _should_show_comment(c: dict, current_user: dict, post_can_manage: bool) -> bool:
+def _should_show_comment(c: dict[str, Any], current_user: dict[str, Any], post_can_manage: bool) -> bool:
     """Check if a comment should be visible to the current user."""
     if c.get("is_deleted_by_author"):
         return False
@@ -168,7 +169,7 @@ def _should_show_comment(c: dict, current_user: dict, post_can_manage: bool) -> 
     return not (c.get("is_hidden_by_admin") and not c_is_author and not post_can_manage)
 
 
-def _render_comment_header(c: dict) -> tuple[str, str]:
+def _render_comment_header(c: dict[str, Any]) -> tuple[str, bool]:
     """Render comment author name + badge. Returns (name_cls, is_teacher)."""
     is_teacher = c.get("user_type") == "teacher"
     name_cls = "text-blue-500 font-bold" if is_teacher else "text-blue-500"
@@ -181,7 +182,9 @@ def _render_comment_header(c: dict) -> tuple[str, str]:
     return name_cls, is_teacher
 
 
-def _render_comment_actions(c: dict, current_user: dict, post_can_manage: bool, refresh_fn):
+def _render_comment_actions(
+    c: dict[str, Any], current_user: dict[str, Any], post_can_manage: bool, refresh_fn: Any
+) -> None:
     """Render action buttons for a single comment."""
     c_is_author = c.get("user_id") == current_user["user_id"]
     c_can_hide = post_can_manage and not c_is_author
@@ -205,7 +208,9 @@ def _render_comment_actions(c: dict, current_user: dict, post_can_manage: bool, 
     )
 
 
-def _render_comment_action_row(c, c_is_author, post_id, refresh_fn, post_can_manage):
+def _render_comment_action_row(
+    c: dict[str, Any], c_is_author: bool, post_id: str, refresh_fn: Any, post_can_manage: bool
+) -> None:
     """Render the right-aligned action buttons (hide/unhide/delete/reply) for a comment."""
     c_can_del = c_is_author or post_can_manage
     c_can_hide = post_can_manage and not c_is_author
@@ -235,7 +240,9 @@ def _render_comment_action_row(c, c_is_author, post_id, refresh_fn, post_can_man
         ).props("flat dense size=sm color=blue icon-only")
 
 
-def _render_replies(replies, current_user, refresh_fn, post_can_manage):
+def _render_replies(
+    replies: list[dict[str, Any]], current_user: dict[str, Any], refresh_fn: Any, post_can_manage: bool
+) -> None:
     """Render the list of replies under a comment, skipping hidden/deleted ones."""
     if not replies:
         return
@@ -271,7 +278,9 @@ def _render_replies(replies, current_user, refresh_fn, post_can_manage):
                         ).props("flat dense size=sm color=red icon-only")
 
 
-def _render_single_comment(c, current_user, refresh_fn, post_can_manage, post_id):
+def _render_single_comment(
+    c: dict[str, Any], current_user: dict[str, Any], refresh_fn: Any, post_can_manage: bool, post_id: str
+) -> bool:
     """Render one comment row, its replies, and its reply box. Skips hidden/deleted."""
     if c.get("is_deleted_by_author"):
         return False
@@ -309,7 +318,9 @@ def _render_single_comment(c, current_user, refresh_fn, post_can_manage, post_id
     return True
 
 
-def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False):
+def _render_comments(
+    post_data: dict[str, Any], current_user: dict[str, Any], refresh_fn: Any, post_can_manage: bool = False
+) -> None:
     comments = post_data.get("comments", [])
 
     with ui.column().classes("w-full"):
@@ -329,7 +340,7 @@ def _render_comments(post_data, current_user, refresh_fn, post_can_manage=False)
         _comment_boxes[post_data["id"]] = comment_box
 
 
-def _toggle_like(post_id, refresh_fn):
+def _toggle_like(post_id: str, refresh_fn: Any) -> None:
     from core.auth import AuthManager
 
     user = AuthManager.get_current_user()
@@ -346,7 +357,7 @@ def _toggle_like(post_id, refresh_fn):
         refresh_fn()
 
 
-def _add_comment(post_id, input_elem, refresh_fn):
+def _add_comment(post_id: str, input_elem: Any, refresh_fn: Any) -> None:
     from core.auth import AuthManager
 
     user = AuthManager.get_current_user()
@@ -365,7 +376,7 @@ def _add_comment(post_id, input_elem, refresh_fn):
         refresh_fn()
 
 
-def _delete_comment(comment_id, post_id, refresh_fn):
+def _delete_comment(comment_id: str, post_id: str, refresh_fn: Any) -> None:
     with get_db() as db:
         c = db.query(Comment).filter(Comment.id == comment_id).first()
         if c:
@@ -376,7 +387,7 @@ def _delete_comment(comment_id, post_id, refresh_fn):
         refresh_fn()
 
 
-def _delete_post(post_id, refresh_fn):
+def _delete_post(post_id: str, refresh_fn: Any) -> None:
     with get_db() as db:
         db.query(Comment).filter(Comment.post_id == post_id).delete()
         db.query(Like).filter(Like.post_id == post_id).delete()
@@ -393,7 +404,7 @@ def _delete_post(post_id, refresh_fn):
         refresh_fn()
 
 
-def _compute_user_org_ids(user_obj, db, visible_ids: list[str]) -> set[str]:
+def _compute_user_org_ids(user_obj: Any, db: Any, visible_ids: list[str]) -> set[str]:
     """Compute the set of org IDs that are visible to this user for visibility filtering."""
     user_org_ids: set[str] = set()
     if user_obj.user_type == "student":
@@ -412,9 +423,9 @@ def _compute_user_org_ids(user_obj, db, visible_ids: list[str]) -> set[str]:
     return user_org_ids
 
 
-def _apply_visibility_filters(posts, user_id: str, user_org_ids: set[str]) -> list:
+def _apply_visibility_filters(posts: list[Any], user_id: str, user_org_ids: set[str]) -> list[Any]:
     """Filter posts by visibility settings (private/partial/excluded)."""
-    filtered: list = []
+    filtered: list[Any] = []
     for post in posts:
         if post.visibility == "private" and post.user_id != user_id:
             continue
@@ -430,7 +441,15 @@ def _apply_visibility_filters(posts, user_id: str, user_org_ids: set[str]) -> li
     return filtered
 
 
-def _build_post_dict(post, author, org, comments, like_count: int, is_liked: bool, comment_count: int) -> dict:
+def _build_post_dict(
+    post: Any,
+    author: Any,
+    org: Any,
+    comments: list[dict[str, Any]],
+    like_count: int,
+    is_liked: bool,
+    comment_count: int,
+) -> dict[str, Any]:
     """Build the dict representation of a single post."""
     return {
         "id": post.id,
@@ -455,7 +474,7 @@ def _build_post_dict(post, author, org, comments, like_count: int, is_liked: boo
     }
 
 
-def _build_posts_query(db, user_obj, filter_org_id):
+def _build_posts_query(db: Any, user_obj: Any, filter_org_id: str | list[str] | None) -> tuple[Any, bool]:
     """Build the base post query for `load_posts`.
 
     Returns (query, ok). When ok is False, the caller must return [] (either
@@ -478,7 +497,7 @@ def _build_posts_query(db, user_obj, filter_org_id):
     return query, False
 
 
-def _collect_post_relations(db, filtered, viewer_id):
+def _collect_post_relations(db: Any, filtered: list[Any], viewer_id: str) -> dict[str, Any]:
     """Batch-load likes, comments, replies, users and orgs for the given posts.
 
     Returns a dict containing the lookup tables needed for dict assembly.
@@ -526,7 +545,7 @@ def _collect_post_relations(db, filtered, viewer_id):
     }
 
 
-def _build_reply_dict(r, users_map):
+def _build_reply_dict(r: Any, users_map: dict[str, Any]) -> dict[str, Any]:
     """Convert a Reply ORM row to its API dict representation."""
     ra = users_map.get(r.user_id)
     return {
@@ -540,7 +559,7 @@ def _build_reply_dict(r, users_map):
     }
 
 
-def _build_comment_dict(c, users_map, replies_by_comment):
+def _build_comment_dict(c: Any, users_map: dict[str, Any], replies_by_comment: dict[str, list[Any]]) -> dict[str, Any]:
     """Convert a Comment ORM row + its replies to its API dict representation."""
     ca = users_map.get(c.user_id)
     replies_data = [_build_reply_dict(r, users_map) for r in replies_by_comment.get(c.id, [])]
@@ -556,7 +575,7 @@ def _build_comment_dict(c, users_map, replies_by_comment):
     }
 
 
-def load_posts(user: dict, filter_org_id=None) -> list[dict]:
+def load_posts(user: dict[str, Any], filter_org_id: str | list[str] | None = None) -> list[dict[str, Any]]:
     with get_db() as db:
         user_obj = db.query(User).filter(User.id == user["user_id"]).first()
         if not user_obj:
@@ -586,7 +605,7 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
         for r in rels["all_replies"]:
             replies_by_comment.setdefault(r.comment_id, []).append(r)
 
-        result: list[dict] = []
+        result: list[dict[str, Any]] = []
         for post in filtered:
             author = users_map.get(post.user_id)
             org = orgs_map.get(post.org_id)
@@ -616,7 +635,7 @@ def load_posts(user: dict, filter_org_id=None) -> list[dict]:
         return result
 
 
-def _time_ago(dt) -> str:
+def _time_ago(dt: Any) -> str:
     if not dt:
         return ""
     now = datetime.utcnow()
@@ -631,10 +650,10 @@ def _time_ago(dt) -> str:
     elif seconds < 604800:
         return f"{seconds // 86400}天前"
     else:
-        return dt.strftime("%Y-%m-%d")
+        return cast(str, dt.strftime("%Y-%m-%d"))
 
 
-def _hide_post(post_id, refresh_fn):
+def _hide_post(post_id: str, refresh_fn: Any) -> None:
     with get_db() as db:
         post = db.query(Post).filter(Post.id == post_id).first()
         if post:
@@ -645,7 +664,7 @@ def _hide_post(post_id, refresh_fn):
         refresh_fn()
 
 
-def _unhide_post(post_id, refresh_fn):
+def _unhide_post(post_id: str, refresh_fn: Any) -> None:
     with get_db() as db:
         post = db.query(Post).filter(Post.id == post_id).first()
         if post:
@@ -656,7 +675,7 @@ def _unhide_post(post_id, refresh_fn):
         refresh_fn()
 
 
-def _hide_comment(comment_id, refresh_fn):
+def _hide_comment(comment_id: str, refresh_fn: Any) -> None:
     with get_db() as db:
         comment = db.query(Comment).filter(Comment.id == comment_id).first()
         if comment:
@@ -667,7 +686,7 @@ def _hide_comment(comment_id, refresh_fn):
         refresh_fn()
 
 
-def _unhide_comment(comment_id, refresh_fn):
+def _unhide_comment(comment_id: str, refresh_fn: Any) -> None:
     with get_db() as db:
         comment = db.query(Comment).filter(Comment.id == comment_id).first()
         if comment:
@@ -678,7 +697,7 @@ def _unhide_comment(comment_id, refresh_fn):
         refresh_fn()
 
 
-def _delete_comment_by_author(comment_id, post_id, refresh_fn):
+def _delete_comment_by_author(comment_id: str, post_id: str, refresh_fn: Any) -> None:
     with get_db() as db:
         comment = db.query(Comment).filter(Comment.id == comment_id).first()
         if comment:
@@ -689,16 +708,16 @@ def _delete_comment_by_author(comment_id, post_id, refresh_fn):
         refresh_fn()
 
 
-_reply_boxes = {}
+_reply_boxes: dict[str, Any] = {}
 
 
-def _toggle_reply_box(comment_id):
+def _toggle_reply_box(comment_id: str) -> None:
     if comment_id in _reply_boxes:
         box = _reply_boxes[comment_id]
         box.set_value(not box.value)
 
 
-def _add_reply(comment_id, input_elem, refresh_fn):
+def _add_reply(comment_id: str, input_elem: Any, refresh_fn: Any) -> None:
     from core.auth import AuthManager
 
     user = AuthManager.get_current_user()
@@ -717,7 +736,7 @@ def _add_reply(comment_id, input_elem, refresh_fn):
         refresh_fn()
 
 
-def _delete_reply_by_author(reply_id, refresh_fn):
+def _delete_reply_by_author(reply_id: str, refresh_fn: Any) -> None:
     with get_db() as db:
         reply = db.query(Reply).filter(Reply.id == reply_id).first()
         if reply:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
@@ -26,7 +26,7 @@ def can_manage_comment(user: User, comment: Comment, post: Post) -> bool:
     if user.user_type == "admin":
         return True
     if user.user_type == "student":
-        return comment.user_id == user.id
+        return cast(bool, comment.user_id == user.id)
     if comment.user_id == user.id:
         return True
     from database import get_db
@@ -40,7 +40,7 @@ def can_delete_post(user: User, post: Post) -> bool:
     if user.user_type == "admin":
         return True
     if user.user_type == "student":
-        return post.user_id == user.id
+        return cast(bool, post.user_id == user.id)
     if post.user_id == user.id:
         return True
     from database import get_db
@@ -51,7 +51,7 @@ def can_delete_post(user: User, post: Post) -> bool:
 
 
 def is_system_admin(user: User) -> bool:
-    return user.user_type == "admin"
+    return cast(bool, user.user_type == "admin")
 
 
 def get_user_roles(db: Session, user: User) -> list[dict[str, Any]]:

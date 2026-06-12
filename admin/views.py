@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from nicegui import APIRouter, app, ui
 
 from core.auth import AuthManager
@@ -9,7 +11,7 @@ from database import get_db
 router = APIRouter()
 
 
-def _get_admin_context(user):
+def _get_admin_context(user: dict[str, Any]) -> tuple[bool, list[str] | None]:
     if user.get("user_type") == "admin":
         return True, None
     with get_db() as db:
@@ -22,7 +24,7 @@ def _get_admin_context(user):
     return False, None
 
 
-def _check_admin_access(user):
+def _check_admin_access(user: dict[str, Any]) -> bool:
     if user.get("user_type") == "admin":
         return True
     with get_db() as db:
@@ -32,12 +34,12 @@ def _check_admin_access(user):
     return False
 
 
-@router.page("/admin")
-async def admin_index():
+@router.page("/admin")  # type: ignore[misc]
+async def admin_index() -> None:
     if not AuthManager.is_authenticated():
         ui.navigate.to("/login")
         return
-    user = AuthManager.get_current_user()
+    user = cast(dict[str, Any], AuthManager.get_current_user())
     if not _check_admin_access(user):
         ui.notify("权限不足", type="negative")
         ui.navigate.to("/home")
@@ -57,13 +59,13 @@ async def admin_index():
             ui.button("权限管理", on_click=lambda: ui.navigate.to("/admin/roles")).props("color=primary")
 
 
-@router.page("/admin/org")
-async def admin_org():
+@router.page("/admin/org")  # type: ignore[misc]
+async def admin_org() -> None:
 
     if not AuthManager.is_authenticated():
         ui.navigate.to("/login")
         return
-    user = AuthManager.get_current_user()
+    user = cast(dict[str, Any], AuthManager.get_current_user())
     if not _check_admin_access(user):
         ui.navigate.to("/home")
         return
@@ -88,7 +90,7 @@ async def admin_org():
                     ui.input(label="学校代码", placeholder="如：xx001").classes("w-48").props("outlined dense")
                 )
 
-            async def on_create_click():
+            async def on_create_click() -> None:
                 await _create_school_from_inputs(
                     school_name_input.value,
                     school_code_input.value,
@@ -143,7 +145,7 @@ async def _create_school_from_inputs(name: str, code: str) -> None:
     ui.notify(f"学校 {name} 创建成功，含5个年级30个班级", type="positive")
 
 
-def _refresh_orgs(container, admin_schools=None):
+def _refresh_orgs(container: Any, admin_schools: list[str] | None = None) -> None:
     container.clear()
     with container, get_db() as db:
         schools = get_schools(db)
@@ -165,12 +167,12 @@ def _refresh_orgs(container, admin_schools=None):
                                 ui.badge(f"{cls.name} ({count}人)", color="blue").classes("cursor-pointer")
 
 
-@router.page("/admin/users")
-async def admin_users():
+@router.page("/admin/users")  # type: ignore[misc]
+async def admin_users() -> None:
     if not AuthManager.is_authenticated():
         ui.navigate.to("/login")
         return
-    user = AuthManager.get_current_user()
+    user = cast(dict[str, Any], AuthManager.get_current_user())
     if not _check_admin_access(user):
         ui.navigate.to("/home")
         return
@@ -215,7 +217,7 @@ async def admin_users():
 
         user_table_container = ui.column().classes("w-full mt-4")
 
-        async def do_action():
+        async def do_action() -> None:
             sid = school_select.value
             action = action_select.value
             if not sid:
@@ -234,7 +236,7 @@ async def admin_users():
         _refresh_user_table(user_table_container, admin_schools)
 
 
-def _gen_students(school_id, container, admin_schools=None):
+def _gen_students(school_id: str, container: Any, admin_schools: list[str] | None = None) -> None:
     from config import config as cfg
 
     if admin_schools and school_id not in admin_schools:
@@ -275,7 +277,7 @@ def _gen_students(school_id, container, admin_schools=None):
     _refresh_user_table(container, admin_schools)
 
 
-def _show_teacher_dialog(school_id, container, admin_schools=None):
+def _show_teacher_dialog(school_id: str, container: Any, admin_schools: list[str] | None = None) -> None:
     from config import config as cfg
 
     if admin_schools and school_id not in admin_schools:
@@ -287,7 +289,7 @@ def _show_teacher_dialog(school_id, container, admin_schools=None):
         name_input = ui.input(label="姓名", placeholder="教师姓名").classes("w-full").props("outlined dense")
         username_input = ui.input(label="用户名", placeholder="如：Txx001001").classes("w-full").props("outlined dense")
 
-        async def create():
+        async def create() -> None:
             name = name_input.value.strip()
             uname = username_input.value.strip()
             if not name or not uname:
@@ -318,7 +320,7 @@ def _show_teacher_dialog(school_id, container, admin_schools=None):
     dialog.open()
 
 
-def _reset_passwords(school_id, admin_schools=None):
+def _reset_passwords(school_id: str, admin_schools: list[str] | None = None) -> None:
     from config import config as cfg
 
     if admin_schools and school_id not in admin_schools:
@@ -346,7 +348,7 @@ def _reset_passwords(school_id, admin_schools=None):
     ui.notify(f"已重置 {count} 个账号密码为: {cfg.DEFAULT_PASSWORD}", type="positive")
 
 
-def _user_table_columns():
+def _user_table_columns() -> list[dict[str, str]]:
     return [
         {"name": "用户名", "label": "用户名", "field": "用户名"},
         {"name": "姓名", "label": "姓名", "field": "姓名"},
@@ -355,7 +357,7 @@ def _user_table_columns():
     ]
 
 
-def _user_row(user, type_label):
+def _user_row(user: Any, type_label: str) -> dict[str, Any]:
     return {
         "用户名": user.username,
         "姓名": user.display_name or "",
@@ -364,12 +366,12 @@ def _user_row(user, type_label):
     }
 
 
-def _render_user_table(rows):
+def _render_user_table(rows: list[dict[str, Any]]) -> None:
     if rows:
         ui.table(columns=_user_table_columns(), rows=rows).classes("w-full")
 
 
-def _render_grade_section(db, grade, classes):
+def _render_grade_section(db: Any, grade: Any, classes: list[Any]) -> None:
     grade_student_count = sum(
         db.query(User)
         .filter(
@@ -400,7 +402,7 @@ def _render_grade_section(db, grade, classes):
                         ui.label(f"...等共 {len(students)} 人").classes("text-xs text-gray-400")
 
 
-def _refresh_user_table(container, admin_schools=None):
+def _refresh_user_table(container: Any, admin_schools: list[str] | None = None) -> None:
     container.clear()
     with container, get_db() as db:
         schools = get_schools(db)
@@ -431,12 +433,12 @@ def _refresh_user_table(container, admin_schools=None):
                     _render_user_table([_user_row(a, "管理员") for a in admins])
 
 
-@router.page("/admin/roles")
-async def admin_roles():
+@router.page("/admin/roles")  # type: ignore[misc]
+async def admin_roles() -> None:
     if not AuthManager.is_authenticated():
         ui.navigate.to("/login")
         return
-    user = AuthManager.get_current_user()
+    user = cast(dict[str, Any], AuthManager.get_current_user())
     if not _check_admin_access(user):
         ui.navigate.to("/home")
         return
@@ -466,7 +468,7 @@ async def admin_roles():
 
         role_container = ui.column().classes("w-full")
 
-        async def load_roles():
+        async def load_roles() -> None:
             sid = school_select.value
             if not sid:
                 return
@@ -478,7 +480,7 @@ async def admin_roles():
             _refresh_roles(role_container, list(school_opts.keys())[0], is_super)
 
 
-def _build_org_options(db, school, school_id):
+def _build_org_options(db: Any, school: Any, school_id: str) -> dict[str, str]:
     org_opts = {str(school.id): f"{school.name}(全校)"}
     for grade in get_grades(db, school_id):
         org_opts[str(grade.id)] = f"{grade.name}"
@@ -488,7 +490,7 @@ def _build_org_options(db, school, school_id):
     return org_opts
 
 
-def _available_role_options(is_super):
+def _available_role_options(is_super: bool) -> dict[str, str]:
     if is_super:
         return {
             "school_admin": "学校管理员",
@@ -501,7 +503,7 @@ def _available_role_options(is_super):
     }
 
 
-def _role_label(role):
+def _role_label(role: str) -> str:
     return {
         "school_admin": "学校管理员",
         "grade_admin": "年级管理员",
@@ -509,8 +511,8 @@ def _role_label(role):
     }.get(role, role)
 
 
-def _make_delete_role_handler(container, school_id, is_super):
-    async def handler(rid):
+def _make_delete_role_handler(container: Any, school_id: str, is_super: bool) -> Any:
+    async def handler(rid: Any) -> None:
         with get_db() as db2:
             assigner = db2.query(User).filter(User.id == app.storage.user.get("user_id")).first()
             if not assigner:
@@ -539,7 +541,7 @@ def _make_delete_role_handler(container, school_id, is_super):
     return handler
 
 
-def _render_authorization_list(db, container, school_id, is_super):
+def _render_authorization_list(db: Any, container: Any, school_id: str, is_super: bool) -> None:
     roles = db.query(UserRole).join(User, UserRole.user_id == User.id).filter(User.default_org_id == school_id).all()
     if not roles:
         ui.label("暂无授权记录").classes("text-gray-400")
@@ -569,7 +571,14 @@ def _render_authorization_list(db, container, school_id, is_super):
                 ).props("flat dense size=sm color=red").tooltip("撤销授权")
 
 
-def _render_role_assignment_form(container, school_id, is_super, teacher_opts, org_opts, role_options):
+def _render_role_assignment_form(
+    container: Any,
+    school_id: str,
+    is_super: bool,
+    teacher_opts: dict[str, str],
+    org_opts: dict[str, str],
+    role_options: dict[str, str],
+) -> None:
     with ui.row().classes("gap-2 items-end"):
         user_select = ui.select(label="选择教师", options=teacher_opts).classes("w-48")
         role_select = ui.select(
@@ -579,7 +588,7 @@ def _render_role_assignment_form(container, school_id, is_super, teacher_opts, o
         ).classes("w-40")
         scope_select = ui.select(label="管辖范围", options=org_opts).classes("w-48")
 
-    async def assign_role():
+    async def assign_role() -> None:
         uid = user_select.value
         role = role_select.value
         scope = scope_select.value
@@ -617,7 +626,7 @@ def _render_role_assignment_form(container, school_id, is_super, teacher_opts, o
         ui.label("提示：校级管理员只能由超级管理员赋权").classes("text-xs text-amber-600 mt-2")
 
 
-def _refresh_roles(container, school_id, is_super):
+def _refresh_roles(container: Any, school_id: str, is_super: bool) -> None:
     container.clear()
     with container, get_db() as db:
         school = db.query(Org).filter(Org.id == school_id).first()

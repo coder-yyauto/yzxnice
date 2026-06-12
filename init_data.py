@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -8,7 +9,7 @@ from core.models import Org, User, UserRole
 from database import get_db, init_db
 
 
-def init_data():
+def init_data() -> None:
     init_db()
 
     with get_db() as db:
@@ -45,7 +46,7 @@ def init_data():
     _print_account_info()
 
 
-def _create_school(db, name, code):
+def _create_school(db: Any, name: str, code: str) -> Any:
     existing = db.query(Org).filter(Org.school_code == code).first()
     if existing:
         print(f"学校 {name} ({code}) 已存在，跳过")
@@ -81,7 +82,7 @@ def _create_school(db, name, code):
     return school
 
 
-def _gen_all_students(db):
+def _gen_all_students(db: Any) -> None:
     schools = db.query(Org).filter(Org.org_type == "school").all()
     for school in schools:
         grades = db.query(Org).filter(Org.org_type == "grade", Org.parent_id == school.id).all()
@@ -113,7 +114,7 @@ def _gen_all_students(db):
     print(f"学生账号总数: {total}")
 
 
-def _ensure_teachers(db):
+def _ensure_teachers(db: Any) -> None:
     schools = db.query(Org).filter(Org.org_type == "school").all()
     for school in schools:
         code = school.school_code
@@ -152,7 +153,7 @@ def _ensure_teachers(db):
     print(f"教师账号总数: {total}")
 
 
-def _print_account_info():
+def _print_account_info() -> None:
     with get_db() as db:
         schools = db.query(Org).filter(Org.org_type == "school").all()
         for school in schools:

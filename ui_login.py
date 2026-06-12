@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from nicegui import APIRouter, ui
 from starlette.requests import Request
@@ -33,8 +34,8 @@ def _check_login_blocked(username: str, client_ip: str) -> str | None:
     return None
 
 
-@router.page("/login")
-async def login_page(request: Request):
+@router.page("/login")  # type: ignore[misc]
+async def login_page(request: Request) -> None:
     if AuthManager.is_authenticated():
         ui.navigate.to("/home")
         return
@@ -60,9 +61,9 @@ def _render_login_form(request: Request, expired: bool) -> None:
             ui.input(placeholder="密码", password=True).classes("w-full mb-3").props("outlined dense type=password")
         )
 
-        captcha_state = {"id": None}
+        captcha_state: dict[str, Any] = {"id": None}
 
-        def refresh_captcha():
+        def refresh_captcha() -> None:
             captcha_id, _, image_data = CaptchaManager.generate()
             captcha_state["id"] = captcha_id
             captcha_img.set_source(image_data)
@@ -76,11 +77,11 @@ def _render_login_form(request: Request, expired: bool) -> None:
 
         error_label = ui.label("").classes("text-red-500 text-sm mb-2 hidden")
 
-        def _show_error(msg: str):
+        def _show_error(msg: str) -> None:
             error_label.set_text(msg)
             error_label.classes(remove="hidden")
 
-        def handle_login():
+        def handle_login() -> None:
             username = username_input.value.strip()
             password = password_input.value
             captcha = captcha_input.value.strip()

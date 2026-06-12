@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+from typing import Any, cast
 
 from nicegui import APIRouter, ui
 
@@ -19,24 +20,21 @@ from database import get_db
 router = APIRouter()
 
 
-@router.page("/home")
-async def home_page():
+@router.page("/home")  # type: ignore[misc]
+async def home_page() -> None:
     if not AuthManager.is_authenticated():
         ui.navigate.to("/login")
         return
 
     from pyq.card import load_posts, render_post_card
-    from pyq.components import render_navbar
 
-    render_navbar()
-
-    user = AuthManager.get_current_user()
-    filter_state = {"org_ids": None}
+    user = cast(dict[str, Any], AuthManager.get_current_user())
+    filter_state: dict[str, Any] = {"org_ids": None}
 
     with get_db() as db:
         user_obj, is_teacher_view, school_id, grades_data = _load_home_viewer(db, user)
 
-    def refresh_posts():
+    def refresh_posts() -> None:
         _render_posts_into(post_container, load_posts, render_post_card, user, filter_state)
 
     with (
@@ -57,7 +55,7 @@ async def home_page():
         refresh_posts()
 
 
-def _load_home_viewer(db, user):
+def _load_home_viewer(db: Any, user: dict[str, Any]) -> tuple[Any, bool, str | None, list[dict[str, Any]]]:
     """Resolve the viewer's role, school, and grade/class tree for the home page."""
     user_obj = db.query(User).filter(User.id == user["user_id"]).first()
     is_teacher_view = user_obj and user_obj.user_type in ("teacher", "admin")
@@ -67,7 +65,7 @@ def _load_home_viewer(db, user):
         if school:
             school_id = school.id
 
-    grades_data: list[dict] = []
+    grades_data: list[dict[str, Any]] = []
     if is_teacher_view and school_id:
         for grade in get_grades(db, school_id):
             classes = get_classes(db, grade.id)
@@ -81,7 +79,7 @@ def _load_home_viewer(db, user):
     return user_obj, is_teacher_view, school_id, grades_data
 
 
-def _render_filter_selector(grades_data, filter_state, refresh_fn):
+def _render_filter_selector(grades_data: list[dict[str, Any]], filter_state: dict[str, Any], refresh_fn: Any) -> None:
     """Render the '查看范围' button plus the grade/class filter dialog."""
     filter_label = (
         ui.button("查看范围: 全部", on_click=lambda: _open_filter_dialog())
@@ -89,13 +87,13 @@ def _render_filter_selector(grades_data, filter_state, refresh_fn):
         .classes("text-xs")
     )
 
-    def _do_select(ids, label_text, dialog):
+    def _do_select(ids: list[str], label_text: str, dialog: Any) -> None:
         filter_state["org_ids"] = ids if ids else None
         filter_label.set_text(label_text)
         dialog.close()
         refresh_fn()
 
-    def _open_filter_dialog():
+    def _open_filter_dialog() -> None:
         with ui.dialog() as dialog, ui.card().classes("w-80 p-4"):
             ui.label("查看范围").classes("text-base font-bold mb-3")
 
@@ -123,7 +121,9 @@ def _render_filter_selector(grades_data, filter_state, refresh_fn):
         dialog.open()
 
 
-def _render_posts_into(post_container, load_posts, render_post_card, user, filter_state):
+def _render_posts_into(
+    post_container: Any, load_posts: Any, render_post_card: Any, user: dict[str, Any], filter_state: dict[str, Any]
+) -> None:
     """Clear `post_container` and re-render the user's filtered posts."""
     post_container.clear()
     with post_container:
@@ -132,19 +132,19 @@ def _render_posts_into(post_container, load_posts, render_post_card, user, filte
             ui.label("暂无内容").classes("text-gray-400 text-center py-8 w-full")
         for pd in posts:
 
-            def _reload():
+            def _reload() -> None:
                 _render_posts_into(post_container, load_posts, render_post_card, user, filter_state)
 
             render_post_card(pd, user, _reload)
 
 
-@router.page("/publish")
-async def publish_page():
+@router.page("/publish")  # type: ignore[misc]
+async def publish_page() -> None:
     if not AuthManager.is_authenticated():
         ui.navigate.to("/login")
         return
 
-    user = AuthManager.get_current_user()
+    user = cast(dict[str, Any], AuthManager.get_current_user())
 
     with get_db() as db:
         ctx = _resolve_publish_context(db, user)
@@ -153,7 +153,7 @@ async def publish_page():
         return
     default_org_id, org_tree = ctx
 
-    state = {
+    state: dict[str, Any] = {
         "files": [],
         "show_location": True,
         "visibility": "public",
@@ -164,7 +164,7 @@ async def publish_page():
     _render_publish_form(state, org_tree, user["user_id"], default_org_id)
 
 
-def _resolve_publish_context(db, user):
+def _resolve_publish_context(db: Any, user: dict[str, Any]) -> tuple[str | None, dict[str, str]] | None:
     """Resolve the user's default org id and org tree for publishing.
 
     Returns (default_org_id, org_tree) or None if the user no longer exists.
@@ -184,7 +184,9 @@ def _resolve_publish_context(db, user):
     return None, {}
 
 
-def _create_publish_post(db, user_id, content, state, default_org_id) -> bool:
+def _create_publish_post(
+    db: Any, user_id: str, content: str, state: dict[str, Any], default_org_id: str | None
+) -> bool:
     """Insert a new post row derived from the publish form state. Returns False if user is gone."""
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
@@ -214,7 +216,9 @@ def _create_publish_post(db, user_id, content, state, default_org_id) -> bool:
     return True
 
 
-def _render_publish_form(state, org_tree, user_id, default_org_id):
+def _render_publish_form(
+    state: dict[str, Any], org_tree: dict[str, str], user_id: str, default_org_id: str | None
+) -> None:
     """Build the publish form UI and wire its upload + submit handlers.
 
     `handle_upload` and `handle_publish` close over the local `content_input`
@@ -244,7 +248,7 @@ def _render_publish_form(state, org_tree, user_id, default_org_id):
 
                 preview_container = ui.row().classes("flex flex-wrap gap-2")
 
-                def refresh_preview():
+                def refresh_preview() -> None:
                     preview_container.clear()
                     with preview_container:
                         for img in state["files"]:
@@ -259,7 +263,7 @@ def _render_publish_form(state, org_tree, user_id, default_org_id):
 
                 refresh_preview()
 
-                async def handle_upload(e):
+                async def handle_upload(e: Any) -> None:
                     ext = os.path.splitext(e.file.name)[1].lower()
                     if ext.lstrip(".") not in {"png", "jpg", "jpeg", "gif", "webp"}:
                         ui.notify("仅支持图片", type="warning")
@@ -292,7 +296,7 @@ def _render_publish_form(state, org_tree, user_id, default_org_id):
             ):
                 ui.label("所在位置").classes("text-sm text-gray-800")
                 with ui.row().classes("items-center gap-1"):
-                    location_label = ui.label("当前位置").classes("text-sm text-gray-500")
+                    location_label: Any = ui.label("当前位置").classes("text-sm text-gray-500")
                     ui.icon("chevron_right").classes("text-gray-400 text-lg")
 
             with (
@@ -304,7 +308,7 @@ def _render_publish_form(state, org_tree, user_id, default_org_id):
             ):
                 ui.label("谁可以看").classes("text-sm text-gray-800")
                 with ui.row().classes("items-center gap-1"):
-                    vis_label = ui.label("公开").classes("text-sm text-gray-500")
+                    vis_label: Any = ui.label("公开").classes("text-sm text-gray-500")
                     ui.icon("chevron_right").classes("text-gray-400 text-lg")
 
             with (
@@ -316,10 +320,10 @@ def _render_publish_form(state, org_tree, user_id, default_org_id):
             ):
                 ui.label("不给谁看").classes("text-sm text-gray-800")
                 with ui.row().classes("items-center gap-1"):
-                    excl_label = ui.label("不限").classes("text-sm text-gray-500")
+                    excl_label: Any = ui.label("不限").classes("text-sm text-gray-500")
                     ui.icon("chevron_right").classes("text-gray-400 text-lg")
 
-        async def handle_publish():
+        async def handle_publish() -> None:
             content = content_input.value.strip()
             if not content and not state["files"]:
                 ui.notify("请输入内容或上传图片", type="warning")
@@ -334,13 +338,13 @@ def _render_publish_form(state, org_tree, user_id, default_org_id):
         publish_btn.on("click", lambda: handle_publish())
 
 
-def _remove_image(img_name, state, refresh_fn):
+def _remove_image(img_name: str, state: dict[str, Any], refresh_fn: Any) -> None:
     if img_name in state["files"]:
         state["files"].remove(img_name)
         refresh_fn()
 
 
-def _get_student_org_tree(db, user_obj):
+def _get_student_org_tree(db: Any, user_obj: Any) -> dict[str, str]:
     tree = {}
     cls = db.query(Org).filter(Org.id == user_obj.default_org_id).first()
     if cls:
@@ -355,7 +359,7 @@ def _get_student_org_tree(db, user_obj):
     return tree
 
 
-def _get_teacher_org_tree(db, user_obj):
+def _get_teacher_org_tree(db: Any, user_obj: Any) -> dict[str, str]:
     tree = {}
     school = get_user_school(db, user_obj)
     if school:
@@ -367,7 +371,7 @@ def _get_teacher_org_tree(db, user_obj):
     return tree
 
 
-def _get_admin_org_tree(db):
+def _get_admin_org_tree(db: Any) -> dict[str, str]:
     tree = {}
     for s in get_schools(db):
         tree[s.id] = f"{s.name}(全校)"
@@ -378,14 +382,14 @@ def _get_admin_org_tree(db):
     return tree
 
 
-def _show_location_dialog(state, label_elem):
+def _show_location_dialog(state: dict[str, Any], label_elem: Any) -> None:
     with ui.dialog() as dialog, ui.card().classes("w-80 p-4"):
         ui.label("所在位置").classes("text-base font-bold mb-3")
         opts = {"show": "显示位置", "hide": "不显示位置"}
         current = "show" if state["show_location"] else "hide"
         radio = ui.radio(opts, value=current).classes("w-full")
 
-        async def confirm():
+        async def confirm() -> None:
             state["show_location"] = radio.value == "show"
             label_elem.set_text("当前位置" if state["show_location"] else "不显示位置")
             dialog.close()
@@ -397,7 +401,7 @@ def _show_location_dialog(state, label_elem):
     dialog.open()
 
 
-def _show_visibility_dialog(state, label_elem, org_tree):
+def _show_visibility_dialog(state: dict[str, Any], label_elem: Any, org_tree: dict[str, str]) -> None:
     with ui.dialog() as dialog, ui.card().classes("w-[360px] p-4"):
         ui.label("谁可以看").classes("text-base font-bold mb-3")
         vis_type = ui.radio(
@@ -407,7 +411,7 @@ def _show_visibility_dialog(state, label_elem, org_tree):
 
         partial_container = ui.column().classes("w-full mt-2")
 
-        def on_vis_change():
+        def on_vis_change() -> None:
             partial_container.clear()
             if vis_type.value == "partial" and org_tree:
                 with partial_container:
@@ -417,7 +421,7 @@ def _show_visibility_dialog(state, label_elem, org_tree):
                     for oid, name in org_tree.items():
                         checks[oid] = ui.checkbox(name, value=(oid in selected))
 
-                    def collect():
+                    def collect() -> list[str]:
                         return [oid for oid, cb in checks.items() if cb.value]
 
                     partial_container._collect = collect
@@ -427,7 +431,7 @@ def _show_visibility_dialog(state, label_elem, org_tree):
         vis_type.on("update:model-value", on_vis_change)
         on_vis_change()
 
-        async def confirm():
+        async def confirm() -> None:
             state["visibility"] = vis_type.value
             if vis_type.value == "partial":
                 state["visible_to_orgs"] = partial_container._collect()
@@ -444,7 +448,7 @@ def _show_visibility_dialog(state, label_elem, org_tree):
     dialog.open()
 
 
-def _show_exclusion_dialog(state, label_elem, org_tree):
+def _show_exclusion_dialog(state: dict[str, Any], label_elem: Any, org_tree: dict[str, str]) -> None:
     with ui.dialog() as dialog, ui.card().classes("w-[360px] p-4"):
         ui.label("不给谁看").classes("text-base font-bold mb-3")
         selected = list(state["excluded_orgs"])
@@ -452,7 +456,7 @@ def _show_exclusion_dialog(state, label_elem, org_tree):
         for oid, name in org_tree.items():
             checks[oid] = ui.checkbox(name, value=(oid in selected))
 
-        async def confirm():
+        async def confirm() -> None:
             result = [oid for oid, cb in checks.items() if cb.value]
             state["excluded_orgs"] = result
             label_elem.set_text("不限" if not result else f"已排除 {len(result)} 项")

@@ -1,6 +1,7 @@
 import csv
 import io
 import logging
+from typing import Any, cast
 
 from nicegui import APIRouter, ui
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _resolve_role_class_ids(db, role: UserRole) -> set[str]:
+def _resolve_role_class_ids(db: Any, role: UserRole) -> set[str]:
     """Resolve a single UserRole to the set of class Org IDs it covers."""
     scope = db.query(Org).filter(Org.id == role.scope_org_id).first()
     if not scope:
@@ -32,7 +33,7 @@ def _resolve_role_class_ids(db, role: UserRole) -> set[str]:
     return set()
 
 
-def _get_managed_class_ids(user: dict, db) -> set[str]:
+def _get_managed_class_ids(user: dict[str, Any], db: Any) -> set[str]:
     """Return all class org IDs the user can manage seats for."""
     u = db.query(User).filter(User.id == user["user_id"]).first()
     if not u:
@@ -47,19 +48,20 @@ def _get_managed_class_ids(user: dict, db) -> set[str]:
     return managed
 
 
-def _has_seat_access(user: dict) -> bool:
+def _has_seat_access(user: dict[str, Any]) -> bool:
     with get_db() as db:
         u = db.query(User).filter(User.id == user["user_id"]).first()
         if not u:
             return False
         if u.user_type == "admin":
             return True
-        return db.query(UserRole).filter(UserRole.user_id == u.id).count() > 0
+        count = db.query(UserRole).filter(UserRole.user_id == u.id).count()
+        return bool(count > 0)
 
 
-def _build_school_class_index(db, managed_ids: set[str]) -> dict:
+def _build_school_class_index(db: Any, managed_ids: set[str]) -> dict[str, Any]:
     """Group managed class orgs under their parent school."""
-    schools: dict = {}
+    schools: dict[str, Any] = {}
     for cid in managed_ids:
         cls = db.query(Org).filter(Org.id == cid).first()
         if not cls:
@@ -76,12 +78,12 @@ def _build_school_class_index(db, managed_ids: set[str]) -> dict:
     return schools
 
 
-@router.page("/admin/seats")
-async def seat_management():
+@router.page("/admin/seats")  # type: ignore[misc]
+async def seat_management() -> None:
     if not AuthManager.is_authenticated():
         ui.navigate.to("/login")
         return
-    user_data = AuthManager.get_current_user()
+    user_data = cast(dict[str, Any], AuthManager.get_current_user())
     if not _has_seat_access(user_data):
         ui.notify("权限不足", type="negative")
         ui.navigate.to("/home")
@@ -112,7 +114,8 @@ async def seat_management():
                     _render_class_seat_row(cls_obj)
 
 
-def _render_class_seat_row(cls_obj: Org):
+def _render_class_seat_row(cls_obj: Org) -> None:
+
     with ui.row().classes("w-full items-center gap-2 py-2 px-4 border-b border-gray-100"):
         with get_db() as db:
             student_count = (
@@ -136,7 +139,7 @@ def _render_class_seat_row(cls_obj: Org):
         ).props("accept=.csv label=导入CSV重置 color=green flat dense").classes("inline-block")
 
 
-def _export_csv(class_id: str):
+def _export_csv(class_id: str) -> None:
     with get_db() as db:
         cls = db.query(Org).filter(Org.id == class_id).first()
         if not cls:
@@ -167,7 +170,7 @@ def _export_csv(class_id: str):
     ui.notify(f"已导出 {len(students)} 条席位", type="positive")
 
 
-def _clear_seats(class_id: str, class_name: str):
+def _clear_seats(class_id: str, class_name: str) -> None:
     with get_db() as db:
         students = (
             db.query(User).filter(User.default_org_id == class_id, User.user_type == "student", User.is_active).all()
@@ -182,14 +185,14 @@ def _clear_seats(class_id: str, class_name: str):
     ui.notify(f"[{class_name}] 已清空 {count} 条席位姓名/昵称", type="positive")
 
 
-def _make_csv_upload_handler(class_id: str, class_name: str):
-    async def handler(e):
+def _make_csv_upload_handler(class_id: str, class_name: str) -> Any:
+    async def handler(e: Any) -> None:
         await _handle_csv_upload(e, class_id, class_name)
 
     return handler
 
 
-async def _handle_csv_upload(e, class_id: str, class_name: str):
+async def _handle_csv_upload(e: Any, class_id: str, class_name: str) -> None:
     content = e.content
     try:
         text = content.decode("utf-8-sig") if isinstance(content, bytes) else str(content)
